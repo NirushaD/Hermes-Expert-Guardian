@@ -1,8 +1,8 @@
-# Hermes Expert Guardian 0.1.0
+# Hermes Expert Guardian 0.1.1
 
 A conservative, installable **development release**, implemented against the installed Hermes Agent commit `d923a5eb487a17c0a68801bba9ef0f56c81040a8` on Windows 11. This is not a certification that every requirement of the original specification is complete. Read [limitations](docs/COMPATIBILITY.md) before enforcement.
 
-Default: **monitor-only**, expert escalation disabled. No live installation, infrastructure action, credential change, cloud request, or publication has been performed.
+Default: **monitor-only**, expert escalation disabled. Source is published on `main`. No production installation, infrastructure action, credential change or cloud request has been performed. Version 0.1.1 separates the installable runtime from development-only tests and scanner evidence.
 
 The Python plugin records bounded operation/result fingerprints per session and objective. After two matching failures, three failed operations in one scope, three configuration rewrites, or five unchanged observations, Enforce mode returns Hermes' supported `{"action":"block","message":"..."}` directive before further dispatch. Native Hermes interprets this as a veto and returns the message as the tool result. Parent context also receives incident state. This is implemented enforcement, not a model instruction. Monitor mode permits execution.
 
@@ -20,11 +20,11 @@ python package.py
 
 For an installed SDK compatibility probe, use its Python with `tests/runtime_probe.py --runtime <hermes-agent source directory>`. The probe uses a temporary HERMES_HOME, synthetic data and a mocked provider. See [test evidence](docs/TESTING.md).
 
-## Installation after deployment approval
+## Installation for testing
 
 1. Review this source and [security review](docs/SECURITY.md). Keep Manual approvals enabled.
-2. This repository has a configured remote `https://github.com/NirushaD/Hermes-Expert-Guardian.git`, but this implementation has **not been pushed**. Do not assume the remote contains these files. Publish the reviewed branch before using Install from Git.
-3. Once published, open Hermes Desktop → Settings → Plugins → Manage plugins → Install from Git and enter the verified published repository URL. The root must contain `plugin.yaml` and `__init__.py`. The ZIP in `dist/` contains the same Git-tree layout; it is a source archive, not a claimed ZIP-import UI.
+2. Use the runtime-only source on `main`: **https://github.com/NirushaD/Hermes-Expert-Guardian/tree/main/release/hermes-expert-guardian**. Hermes supports GitHub subdirectory URLs and scans the selected subtree. Security tests remain in this development repository, with their original synthetic hostile strings intact.
+3. Open Hermes Desktop → Settings → Plugins → Manage plugins → Install from Git and enter that full URL. The selected subtree contains `plugin.yaml` and `__init__.py`. The ZIP in `dist/` contains the same runtime-only layout; it is a source archive, not a claimed ZIP-import UI. No scanning override is needed. See [installation scan evidence](docs/INSTALL-SCAN.md).
 4. Enable the **agent plugin** for the intended Desktop profile, then enable its Desktop half if separately listed. Restart the backend through Desktop if its auxiliary-model list has not refreshed.
 5. Open Settings → Plugins → Expert Guardian → Agent settings. Keep mode `monitor` initially. Thresholds clamp to 2–50. Enable `expert_enabled` only when ready for per-packet approvals.
 6. In Desktop auxiliary-model settings choose **Expert Guardian**, verify provider `openai-codex` and model `gpt-6.1-sol`, using the existing Hermes authentication. This is a new auxiliary slot; it does not change Review or the primary model. Do not enter credentials into Guardian descriptions.

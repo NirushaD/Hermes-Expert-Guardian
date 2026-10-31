@@ -1,0 +1,41 @@
+{
+  "scan": {
+    "skill_name": "scan-baseline",
+    "source": "https://github.com/NirushaD/Hermes-Expert-Guardian",
+    "trust_level": "community",
+    "verdict": "caution",
+    "findings": [
+      {
+        "pattern_id": "dump_all_env",
+        "severity": "high",
+        "category": "exfiltration",
+        "file": "guardian/privacy.py",
+        "line": 6,
+        "match": "SENSITIVE = re.compile(r\"(?i)(password|passwd|passphrase|secret|token|bearer|cookie|api[_-]?key|credential|private.ke...",
+        "description": "dumps all environment variables"
+      },
+      {
+        "pattern_id": "prompt_injection_ignore",
+        "severity": "medium",
+        "category": "injection",
+        "file": "tests/test_guardian.py",
+        "line": 89,
+        "match": "for v in ['password=abc','Bearer abc','api_key=abc','cookie abc','TOKEN=value','-----BEGIN OPENSSH PRIVATE KEY-----',...",
+        "description": "prompt injection: ignore previous instructions"
+      }
+    ],
+    "scanned_at": "2026-10-31T13:48:53.220835+00:00",
+    "summary": "scan-baseline: caution \u2014 2 finding(s) in exfiltration, injection",
+    "scan_provenance": {
+      "scanner_version": "plugin-guard-v11",
+      "verdict": "caution",
+      "source": "https://github.com/NirushaD/Hermes-Expert-Guardian"
+    }
+  },
+  "decision": "BLOCKED",
+  "policy_allowed": null,
+  "policy_reason": "Requires confirmation (caution verdict, 2 findings)",
+  "force": false,
+  "reviewed_pin": false,
+  "decision_callback": false
+}

@@ -3,7 +3,15 @@ import hashlib
 import json
 import re
 
-SENSITIVE = re.compile(r"(?i)(password|passwd|passphrase|secret|token|bearer|cookie|api[_-]?key|credential|private.key|\.ssh|\.env|auth\.json|BEGIN .*KEY|ignore .*instructions|system prompt|https?://[^\s]+@)")
+# Detection expressions, never file reads or shell commands. Keep each
+# expression individually reviewable rather than embedding a long alternation.
+SENSITIVE_PATTERNS = (
+    r"password", r"passwd", r"passphrase", r"secret", r"token", r"bearer",
+    r"cookie", r"api[_-]?key", r"credential", r"private.key",
+    r"\.ssh", r"\.env", r"auth\.json", r"BEGIN .*KEY",
+    r"ignore .*instructions", r"system prompt", r"https?://[^\s]+@",
+)
+SENSITIVE = re.compile("(" + "|".join(SENSITIVE_PATTERNS) + ")", re.IGNORECASE)
 OPAQUE = re.compile(r"[A-Za-z0-9+/=_-]{32,}")
 
 

@@ -10,11 +10,13 @@ from unittest.mock import patch
 
 parser=argparse.ArgumentParser()
 parser.add_argument('--runtime',required=True)
+parser.add_argument('--plugin-root',type=Path)
 options=parser.parse_args()
-root=Path(__file__).resolve().parents[1]
+workspace=Path(__file__).resolve().parents[1]
+root=options.plugin_root.resolve() if options.plugin_root else workspace
 sys.dont_write_bytecode=True
 sys.path.insert(0,options.runtime)
-with tempfile.TemporaryDirectory(dir=root/'.reference') as scratch:
+with tempfile.TemporaryDirectory(dir=workspace/'.reference') as scratch:
     os.environ['HERMES_HOME']=scratch
     os.environ['HERMES_DISABLE_DOTENV']='1'
     from hermes_cli.plugins import PluginContext, PluginManager, get_pre_tool_call_block_message

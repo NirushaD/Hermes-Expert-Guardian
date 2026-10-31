@@ -27,3 +27,7 @@ The official security scan reports `dump_all_env` at privacy.py:6 because the se
 Hermes hook dispatch isolates errors and can have host-imposed callback timeouts. Guardian returns block on its own initialization/state failures in Enforce mode, but cannot guarantee enforcement if Hermes never invokes its callback, kills the plugin host, or fails open outside the plugin. This is a host boundary, not something a standalone plugin can repair by instructions.
 
 Before production enablement: validate Desktop UI and profile scoping in an isolated profile; verify native approval denial and existing always-allow policy; exercise host-process death and restart; review auxiliary provider fallback behavior and packet visibility; test Telegram bridge co-existence. Use harmless local commands only. Automatic egress, semantic contradiction detection, typed evidence adapters and strict provider wall-clock cancellation remain future work.
+
+## Version 0.1.1 packaging correction
+
+The original scanner caution was reproduced as an actual Desktop installation block. Runtime code now declares individual redaction expressions before compiling the same regex body and flags. Security tests remain in the repository and are excluded only from the generated runtime package, not from scanning policy. The runtime-only Git source passes the standard install gate with zero findings. See INSTALL-SCAN.md for evidence and the repository-default-branch caveat.

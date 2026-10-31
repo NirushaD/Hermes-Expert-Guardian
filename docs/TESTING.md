@@ -22,3 +22,7 @@ Coverage includes: two identical failures; three approaches; failed-then-success
 Not tested as live integrations: actual provider timeout elapsed behavior, Codex OAuth network path, Desktop rendering/navigation, hosted RPC lifetime, live approval UI/denial, existing Telegram bridge co-execution, LM Studio responses, final session-close cleanup. These remain acceptance gates. No Proxmox, SSH, firewall, routing, DHCP, storage or reboot commands were executed. No real credentials were transmitted. All model responses were synthetic.
 
 The first run found SQLite connection handles remaining open on Windows and the conservative scanner rejecting a plugin-generated question containing the word secrets. Both were fixed before the passing runs. Official admission initially exposed eager state access unsupported by its recording context; hook state initialization is now lazy and admission passes.
+
+## Version 0.1.1 follow-up
+
+The original caution finding blocked actual Desktop installation; development admission was insufficient. The runtime-only release now passes the actual standard install-time gate with safe verdict and zero findings, with no overrides. See INSTALL-SCAN.md and the versioned JSON evidence. All 32 tests pass under Hermes Python. The original security fixtures remain intact in the development tree.

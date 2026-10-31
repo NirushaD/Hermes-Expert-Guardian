@@ -1,0 +1,14 @@
+name: hermes-expert-guardian
+version: "0.1.1"
+description: "Deterministic loop monitoring, session-scoped retry vetoes and approved text-only expert advice."
+author: "Hermes Expert Guardian contributors"
+manifest_version: 2
+provides_hooks: [pre_tool_call, post_tool_call, pre_llm_call]
+config_schema:
+  enabled: {type: bool, default: true, description: "Enable Guardian monitoring"}
+  mode: {type: str, default: monitor, choices: [monitor, enforce], description: "Monitor reports incidents; Enforce vetoes affected operations"}
+  identical_failures: {type: int, default: 2}
+  unsuccessful_approaches: {type: int, default: 3}
+  no_progress: {type: int, default: 5}
+  expert_enabled: {type: bool, default: false, description: "Allow manually approved text-only Codex consultations"}
+  expert_timeout: {type: int, default: 60, description: "Host provider timeout in seconds (5–180)"}
