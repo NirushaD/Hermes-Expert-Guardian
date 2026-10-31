@@ -27,6 +27,10 @@ Live Enforce-mode vetoes, native recovery approval/denial, actual Codex consulta
 
 ## Version 0.1.2 acceptance pending
 
-Implementation commit 88494fd733d10b33be9afdd6d0136af0e324a1eb is published on main. Python compilation and JavaScript syntax checks passed; the complete test suite, installer security scan and frontend simulations have not been run for this version. The 32-test and safe-scanner results above apply to 0.1.1 only.
+Implementation commit 88494fd733d10b33be9afdd6d0136af0e324a1eb is published on main. Python compilation and JavaScript syntax checks passed. The 32-test and explicit safe/zero-finding scanner report above apply to 0.1.1 only.
 
-Frontend continuation was blocked by Windows input automation: after reconnecting to the observed Hermes window, the Raise/click attempt failed with `GetCursorPos failed: Access is denied. (0x80070005)`. No 0.1.2 installation or live acceptance test was completed. The installed version remains 0.1.1. Version 0.1.2 must not be described as ready until its outstanding checks pass.
+Initial frontend continuation was blocked by Windows input automation (`GetCursorPos failed: Access is denied. (0x80070005)`). On retry, input worked. The first install refused because the plugin already existed. With explicit user confirmation, the old plugin was removed and the exact 0.1.2 commit was installed through the ordinary Git installer in the default profile, Force reinstall off. The plugin list visibly showed 0.1.2 pinned at 88494fd7 with Agent and Desktop enabled. The standard installation gate permitted installation; the UI did not expose a separate finding count or scanner verdict report.
+
+The updated UI rendered, but its simulation request returned the old 0.1.1 backend response instructing the user to run unittest. A gateway restart completed and Telegram returned to Connected, but the old web-backend response persisted. This is not a simulation pass. Desktop was then closed to reload its backend; reopening the existing executable through Explorer failed with `foreground window did not report a process id`, and Hermes was absent from the subsequent window inventory. No shell/API testing substitute was used.
+
+The installed files are now 0.1.2, but complete-suite, simulation, live enforcement, native recovery, actual provider and Telegram message checks remain pending. Version 0.1.2 must not be described as ready until these checks pass.
