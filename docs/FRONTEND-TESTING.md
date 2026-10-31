@@ -24,3 +24,9 @@ Plugin installed and enabled, Monitor mode unchanged, expert escalation not enab
 ## Not covered
 
 Live Enforce-mode vetoes, native recovery approval/denial, actual Codex consultation, provider timeout, and successful expert-guided recovery were not exercised in this frontend session. Existing automated evidence covers selected API/state-machine behavior but does not replace these live acceptance checks. Telegram bridge remained enabled; a live Telegram message exchange was not performed.
+
+## Version 0.1.2 acceptance pending
+
+Implementation commit 88494fd733d10b33be9afdd6d0136af0e324a1eb is published on main. Python compilation and JavaScript syntax checks passed; the complete test suite, installer security scan and frontend simulations have not been run for this version. The 32-test and safe-scanner results above apply to 0.1.1 only.
+
+Frontend continuation was blocked by Windows input automation: after reconnecting to the observed Hermes window, the Raise/click attempt failed with `GetCursorPos failed: Access is denied. (0x80070005)`. No 0.1.2 installation or live acceptance test was completed. The installed version remains 0.1.1. Version 0.1.2 must not be described as ready until its outstanding checks pass.
