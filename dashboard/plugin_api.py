@@ -1,0 +1,65 @@
+"""Authenticated, profile-scoped Desktop API. No control is registered as an agent tool."""
+import importlib.util
+from pathlib import Path
+import sys
+from fastapi import APIRouter, HTTPException
+
+# Hermes loads backend files as standalone modules; load our own package with relative imports.
+root = Path(__file__).resolve().parents[1]
+name = "_expert_guardian_backend"
+if name not in sys.modules:
+    spec = importlib.util.spec_from_file_location(name, root / "guardian" / "__init__.py",
+                                                submodule_search_locations=[str(root / "guardian")])
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+integration = importlib.import_module(name + ".integration")
+router = APIRouter()
+
+
+@router.get("/incident")
+def incident(session: str):
+    return integration.create().view(session)
+
+
+@router.post("/action")
+def action(body: dict):
+    try:
+        if len(str(body)) > 16000:
+            raise ValueError("Oversized action")
+        service = integration.create()
+        session = body["session"]
+        if not isinstance(session, str) or not session or len(session) > 200:
+            raise ValueError("Session required")
+        kind = body["action"]
+        identity = body.get("incident", "")
+        if kind == "prepare":
+            return service.prepare(session, identity, body["description"], body["outcome"])
+        if kind == "send":
+            return {"state": service.send(session, identity, body["packet_hash"])}
+        if kind == "authorize":
+            if body.get("evidence_reviewed") is not True:
+                raise ValueError("User must confirm consistency with verified evidence")
+            service.authorize(session, identity, body["tool"], body["args"], body["criteria"])
+        elif kind == "resolve":
+            service.resolve(session, identity)
+        elif kind == "reset":
+            service.store.delete(session)
+        elif kind == "objective":
+            from importlib import import_module
+            import_module(name + ".privacy").safe_text(body["objective"])
+            with service.store.session(session) as data:
+                if any(i["state"] != "RESOLVED" for i in data["incidents"]):
+                    raise ValueError("Reset unresolved incident explicitly before changing objective")
+                data["objective"] = body["objective"]
+        elif kind == "deny":
+            with service.store.session(session) as data:
+                service.find(data, identity)["state"] = "ESCALATE_TO_USER"
+        elif kind == "test":
+            # Entirely synthetic, no network and no tool execution.
+            return {"result": "Use python -m unittest discover -s tests -v for the full local test suite"}
+        elif kind not in {"authorize"}:
+            raise ValueError("Unknown action")
+        return {"ok": True}
+    except (ValueError, KeyError, StopIteration, TypeError):
+        raise HTTPException(status_code=400, detail="Action refused. Check incident state and privacy constraints.") from None

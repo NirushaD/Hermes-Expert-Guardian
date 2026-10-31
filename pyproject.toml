@@ -1,0 +1,9 @@
+[project]
+name = "hermes-expert-guardian"
+version = "0.1.0"
+description = "Bounded loop prevention and text-only expert advice for Hermes"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
