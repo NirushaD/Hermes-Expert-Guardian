@@ -34,3 +34,11 @@ Initial frontend continuation was blocked by Windows input automation (`GetCurso
 The updated UI rendered, but its simulation request returned the old 0.1.1 backend response instructing the user to run unittest. A gateway restart completed and Telegram returned to Connected, but the old web-backend response persisted. This is not a simulation pass. Desktop was then closed to reload its backend; reopening the existing executable through Explorer failed with `foreground window did not report a process id`, and Hermes was absent from the subsequent window inventory. No shell/API testing substitute was used.
 
 The installed files are now 0.1.2, but complete-suite, simulation, live enforcement, native recovery, actual provider and Telegram message checks remain pending. Version 0.1.2 must not be described as ready until these checks pass.
+
+## Reopened Desktop: 0.1.2 runtime checks
+
+After the user reopened Desktop, all 17 frontend-triggered safeguard simulations passed. The response explicitly reported simulation_only true, real_tools_executed 0 and cloud_requests 0. These checks do not replace the development suite or live provider/native approval acceptance.
+
+The retained harmless chat requested three identical read_file calls against a new deliberately missing test path. The local Qwen model reported the Guardian notice in its final response, including identical_failure, attempts 2, BLOCK_RETRIES and monitor. This verifies same-turn notice delivery in the live host. A subsequent one-read enforcement probe also reported monitor and was not blocked. Direct inspection of Agent settings confirmed Mode monitor and Expert enabled off; Enforce acceptance therefore remains pending, rather than failed under Enforce.
+
+Frontend inspection also exposed a session-picker bug: activeSessionId is a temporary UI runtime ID, not the durable ID used by Guardian hooks. Version 0.1.3 switches to the documented focusedStoredSessionId atom and labels the field accordingly. Its package build and JavaScript syntax check passed. It has not yet been installed or security-scanned through Desktop.

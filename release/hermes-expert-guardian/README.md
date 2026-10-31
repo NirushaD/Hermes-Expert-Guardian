@@ -1,4 +1,4 @@
-# Hermes Expert Guardian 0.1.2
+# Hermes Expert Guardian 0.1.3
 
 Runtime-only plugin package. Default: monitor-only, expert escalation disabled.
 

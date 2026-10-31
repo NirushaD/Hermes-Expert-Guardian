@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 
 function Settings({ ctx }) {
-  const activeSession = useValue(host.state.activeSessionId)
+  const activeSession = useValue(host.state.focusedStoredSessionId)
   const [session, setSession] = useState(activeSession || '')
   const [incident, setIncident] = useState('')
   const [description, setDescription] = useState('')
@@ -22,8 +22,8 @@ function Settings({ ctx }) {
   return jsxs('div', {style:{padding:'20px',maxWidth:'850px'},children:[
     jsx('h2',{children:'Expert Guardian'}),
     jsx('p',{children:'Agent settings below control monitoring and enforcement. Select the affected session ID. No terminal transcript is sent. Every cloud packet and corrective attempt needs your approval.'}),
-    field('Session ID',session,setSession), field('Incident ID',incident,setIncident),
-    button('Use active session',()=>setSession(activeSession || '')),
+    field('Durable session ID (from the chat URL)',session,setSession), field('Incident ID',incident,setIncident),
+    button('Use focused session',()=>setSession(activeSession || '')),
     button('Run local safeguard simulations (no cloud)',()=>act('test')),
     button('Refresh incidents', async()=>{try{setResult(await ctx.rest('/incident?session='+encodeURIComponent(session)))}catch{host.notify({kind:'error',message:'Cannot load incidents'})}}),
     field('Public problem description (no secrets)',description,setDescription),field('Intended outcome / success criteria',outcome,setOutcome),
