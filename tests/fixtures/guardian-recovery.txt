@@ -1,0 +1,2 @@
+HERMES_GUARDIAN_RECOVERY_OK
+Public local acceptance-test fixture. Reading this file changes no system state.
