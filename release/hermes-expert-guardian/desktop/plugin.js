@@ -1,16 +1,17 @@
-import { host } from '@hermes/plugin-sdk'
+import { host, useValue } from '@hermes/plugin-sdk'
 import { useState } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 
 function Settings({ ctx }) {
-  const [session, setSession] = useState('')
+  const activeSession = useValue(host.state.activeSessionId)
+  const [session, setSession] = useState(activeSession || '')
   const [incident, setIncident] = useState('')
   const [description, setDescription] = useState('')
   const [outcome, setOutcome] = useState('')
   const [operation, setOperation] = useState('{"tool":"terminal","args":{"command":""}}')
   const [result, setResult] = useState(null)
   const [busy, setBusy] = useState(false)
-  const field = (label, value, change) => jsxs('label', { style:{display:'block',margin:'12px 0'}, children:[label, jsx('input', {value, onChange:e=>change(e.target.value), style:{display:'block',width:'100%'}})] })
+  const field = (label, value, change) => jsxs('label', { style:{display:'block',margin:'12px 0'}, children:[label, jsx('input', {value, onChange:e=>change(e.target.value), style:{display:'block',width:'100%',padding:'8px',marginTop:'4px',border:'1px solid #68707c',borderRadius:'4px',background:'transparent',color:'inherit'}})] })
   const act = async (action, extra={}) => {
     setBusy(true)
     try { setResult(await ctx.rest('/action', {method:'POST', body:{session, incident, action, ...extra}})) }
@@ -22,6 +23,8 @@ function Settings({ ctx }) {
     jsx('h2',{children:'Expert Guardian'}),
     jsx('p',{children:'Agent settings below control monitoring and enforcement. Select the affected session ID. No terminal transcript is sent. Every cloud packet and corrective attempt needs your approval.'}),
     field('Session ID',session,setSession), field('Incident ID',incident,setIncident),
+    button('Use active session',()=>setSession(activeSession || '')),
+    button('Run local safeguard simulations (no cloud)',()=>act('test')),
     button('Refresh incidents', async()=>{try{setResult(await ctx.rest('/incident?session='+encodeURIComponent(session)))}catch{host.notify({kind:'error',message:'Cannot load incidents'})}}),
     field('Public problem description (no secrets)',description,setDescription),field('Intended outcome / success criteria',outcome,setOutcome),
     button('Prepare diagnostic preview',()=>act('prepare',{description,outcome})),

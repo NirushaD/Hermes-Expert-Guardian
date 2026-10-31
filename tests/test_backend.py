@@ -32,10 +32,11 @@ class BackendTests(unittest.TestCase):
             def register_auxiliary_task(self, *args, **kwargs): pass
         ctx = Context()
         register(ctx)
-        self.assertEqual(set(ctx.hooks), {"pre_tool_call", "post_tool_call", "pre_llm_call"})
+        self.assertEqual(set(ctx.hooks), {"pre_tool_call", "post_tool_call", "pre_llm_call", "transform_tool_result"})
 
     def test_evidence_confirmation_required(self):
         from fastapi import HTTPException
         with patch.object(self.module.integration, "create") as create, self.assertRaises(HTTPException):
             self.module.action({"session": "s", "incident": "i", "action": "authorize"})
         create.return_value.authorize.assert_not_called()
+

@@ -1,5 +1,6 @@
 """Incident enforcement and bounded recovery. Desktop controls are never model tools."""
 import copy
+import json
 import time
 import uuid
 from . import detection, expert, privacy
@@ -40,6 +41,12 @@ class Guardian:
             with self.store.session(session_id) as data:
                 scope = self.scope(data, task_id, tool_name, args)
                 op = detection.operation(tool_name, args)
+                evidence = data.get("file_evidence", {}).get(privacy.digest(args.get("path", args.get("file_path", ""))))
+                if tool_name == "patch" and evidence and evidence["exists"] is False and time.time()-evidence["time"] < 1800:
+                    if not any(i["scope"] == scope and i["state"] in ACTIVE for i in data["incidents"]):
+                        data["incidents"].append({"id": uuid.uuid4().hex[:12], "scope": scope, "reason": "contradiction",
+                            "state": "BLOCK_RETRIES", "attempts": 1, "escalations": 0, "time": time.time(),
+                            "transitions": ["NORMAL", "LOOP_CONFIRMED", "BLOCK_RETRIES"]})
                 if self.enforce() and len(data["incidents"]) >= 64:
                     return {"action": "block", "message": "Guardian incident capacity reached; user must reset session"}
                 incident = next((i for i in reversed(data["incidents"]) if i["state"] in ACTIVE and
@@ -50,7 +57,8 @@ class Guardian:
                         incident["retry_call"] = tool_call_id
                         incident["state"] = "AWAIT_ACTION_APPROVAL"
                         # Every recovery goes through native human approval, regardless of risk classifier.
-                        return {"action": "approve", "message": "Guardian: approve this single corrective attempt"}
+                        return {"action": "approve", "message": "Guardian: approve this single corrective attempt",
+                                "rule_key": "guardian:" + incident["id"] + ":" + op}
                     return {"action": "block", "message": f"Guardian incident {incident['id']}: {incident['reason']}; {incident['state']}. Open Expert Guardian settings."}
                 if self.enforce() and any(p["op"] == op for p in data["pending"].values()):
                     return {"action": "block", "message": "Guardian: identical operation already in flight"}
@@ -72,12 +80,30 @@ class Guardian:
             active = next((i for i in reversed(data["incidents"]) if i["state"] in ACTIVE and
                            (i["scope"] == scope or (tool_call_id and i.get("retry_call") == tool_call_id))), None)
             if active:
-                if active.get("consumed") and active.get("retry_call") == tool_call_id:
+                if active.get("consumed") and active.get("retry_call") == tool_call_id and not active.get("retry_finished"):
+                    active["retry_finished"] = True
                     active["state"] = "ESCALATE_TO_USER"  # Explicit success verification is still required.
                     active["retry_ok"] = status == "ok" and not detection.failed(result, status)
                 return
             if status in ("blocked", "cancelled"):
                 return
+            # Typed local evidence adapter: a patch requires a file to exist.
+            # Only an error-classified read with the tool's exact missing-file
+            # error establishes absence. Ordinary file text never establishes it.
+            target = args.get("path", args.get("file_path"))
+            if tool_name in {"read_file", "write_file"} and isinstance(target, str):
+                decoded = result
+                if isinstance(result, str):
+                    try:
+                        decoded = json.loads(result)
+                    except ValueError:
+                        decoded = None
+                missing = (tool_name == "read_file" and status == "error" and isinstance(decoded, dict)
+                           and isinstance(decoded.get("error"), str) and decoded["error"].startswith("File not found:"))
+                if missing or (status == "ok" and not detection.failed(result, status)):
+                    evidence = data.setdefault("file_evidence", {})
+                    evidence[privacy.digest(target)] = {"exists": not missing, "time": time.time()}
+                    data["file_evidence"] = dict(list(evidence.items())[-64:])
             # Process status/poll tools and running jobs are excluded from no-progress classification.
             if tool_name in {"process", "process_status", "wait"} or (isinstance(result, dict) and result.get("status") in {"running", "pending"}):
                 return
@@ -142,6 +168,10 @@ class Guardian:
         return state
 
     def authorize(self, session, identity, tool, args, success_criteria):
+        if not self.enabled() or not self.enforce():
+            raise ValueError("Recovery requires enabled Enforce mode")
+        if not isinstance(tool, str) or not tool or not isinstance(args, dict):
+            raise ValueError("Exact tool name and argument object required")
         privacy.safe_text(success_criteria)
         if not success_criteria.strip():
             raise ValueError("Explicit success criteria required")
@@ -172,3 +202,28 @@ class Guardian:
         if active:
             return {"context": "Expert Guardian: " + str([{k: i[k] for k in ("id", "reason", "state")} for i in active]) +
                     ". Open plugin settings for user-controlled escalation. Advice: " + str([i.get("advice") for i in active])}
+
+    def transform(self, tool_name, args, result=None, session_id="", task_id="", **_):
+        """Attach generated incident facts to the same tool result the model receives."""
+        if not self.enabled() or not session_id:
+            return None
+        with self.store.session(session_id) as data:
+            scope = self.scope(data, task_id, tool_name, args)
+            active = [i for i in data["incidents"] if i["scope"] == scope and i["state"] in ACTIVE]
+            if not active:
+                return None
+            item = active[-1]
+            notice = {"incident_id": item["id"], "reason": item["reason"], "state": item["state"],
+                      "attempts": item["attempts"], "mode": self.config("mode", "monitor"),
+                      "message": "Guardian detected repetition. Report this incident to the user. Open Expert Guardian settings."}
+            if isinstance(result, dict):
+                return json.dumps({**result, "guardian_notice": notice})
+            if isinstance(result, str):
+                try:
+                    decoded = json.loads(result)
+                    if isinstance(decoded, dict):
+                        return json.dumps({**decoded, "guardian_notice": notice})
+                except ValueError:
+                    pass
+                return result + "\n\nExpert Guardian incident notice: " + json.dumps(notice)
+            return json.dumps({"result": result, "guardian_notice": notice}, default=str)

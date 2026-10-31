@@ -1,6 +1,7 @@
 """Bounded deterministic fingerprints; no shell parsing or model judgement."""
 import json
 import re
+import shlex
 from .privacy import digest
 
 
@@ -8,7 +9,17 @@ def operation(tool, args):
     normalized = dict(args)
     if isinstance(normalized.get("command"), str):
         # Preserve case and quoted whitespace: collapsing them can change shell semantics.
-        normalized["command"] = normalized["command"].strip()
+        command = normalized["command"].strip()
+        # POSIX read-only commands with plain literal arguments only. Shell syntax,
+        # expansions, scripts, Windows commands and writes retain exact fingerprints.
+        if not re.search(r"[|;&<>$`\\\n\r*?\[\]{}~#]", command):
+            try:
+                words = shlex.split(command, posix=True)
+                if words and words[0] in {"ls", "cat", "stat", "ip", "ping", "uname", "id", "whoami"}:
+                    command = {"literal_posix_argv": words}
+            except ValueError:
+                pass
+        normalized["command"] = command
     return digest([tool, normalized])
 
 

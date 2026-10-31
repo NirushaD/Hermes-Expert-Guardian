@@ -38,7 +38,10 @@ def register(ctx):
         return create(ctx).post(**kwargs)
     def context(**kwargs):
         return create(ctx).context(**kwargs)
+    def transform(**kwargs):
+        return create(ctx).transform(**kwargs)
     ctx.register_hook("pre_tool_call", pre)
     ctx.register_hook("post_tool_call", post)
     ctx.register_hook("pre_llm_call", context)
+    ctx.register_hook("transform_tool_result", transform)
     # on_session_end is turn-scoped in this runtime: never erase safety state there.

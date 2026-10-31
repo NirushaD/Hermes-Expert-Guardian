@@ -1,4 +1,4 @@
-# Hermes Expert Guardian 0.1.1
+# Hermes Expert Guardian 0.1.2
 
 Runtime-only plugin package. Default: monitor-only, expert escalation disabled.
 
@@ -23,3 +23,4 @@ Disable/uninstall the agent plugin and Desktop half through Desktop, then restar
 Full source, tests, security review, compatibility limits and scan evidence:
 
 https://github.com/NirushaD/Hermes-Expert-Guardian
+

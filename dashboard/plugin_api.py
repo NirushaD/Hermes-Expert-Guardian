@@ -56,8 +56,8 @@ def action(body: dict):
             with service.store.session(session) as data:
                 service.find(data, identity)["state"] = "ESCALATE_TO_USER"
         elif kind == "test":
-            # Entirely synthetic, no network and no tool execution.
-            return {"result": "Use python -m unittest discover -s tests -v for the full local test suite"}
+            from importlib import import_module
+            return import_module(name + ".selftest").run()
         elif kind not in {"authorize"}:
             raise ValueError("Unknown action")
         return {"ok": True}

@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory(dir=workspace/'.reference') as scratch:
     module=importlib.util.module_from_spec(spec);sys.modules[spec.name]=module;spec.loader.exec_module(module)
     module.register(context)
     manager=context._manager
-    assert set(manager._hooks)=={'pre_tool_call','post_tool_call','pre_llm_call'}
+    assert set(manager._hooks)=={'pre_tool_call','post_tool_call','pre_llm_call','transform_tool_result'}
     assert 'guardian_expert' in manager._aux_tasks
     g=module.guardian.integration.create(context)
     context.set_config('mode','enforce')
@@ -48,4 +48,5 @@ with tempfile.TemporaryDirectory(dir=workspace/'.reference') as scratch:
         llm.complete(messages=[{'role':'user','content':'Synthetic public diagnostic'}],task='guardian_expert')
     assert 'tools' not in captured[0]
     print(json.dumps({'manifest':'pass','registration':'pass','native_block_directive':'pass','text_only_facade':'pass','production_modified':False}))
+
 
