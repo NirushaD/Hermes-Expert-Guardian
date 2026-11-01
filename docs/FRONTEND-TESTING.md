@@ -152,3 +152,12 @@ After screen capture recovered, the plugin list again showed 0.1.6 at 421ac955. 
 The runner then returned passed true with exactly 42 checks, zero real tools and zero cloud requests, including missing prerequisite evidence remains stopped and missing prerequisite evidence cannot arm recovery. This confirms the new backend code is loaded. The retained chat remained visible; no history reset was used.
 
 Direct Agent-settings inspection showed Monitor and Expert off, as expected after replacement. Opened those controls and asked the user to restore Enforce and Expert manually under the computer-use security-settings rule. Live recovery/denial remains pending; no new Expert packet has yet been sent on 0.1.6.
+
+
+## 0.1.6 real proposals and native recovery prompt
+
+The user restored Enforce and Expert enabled. The configured Expert selection remained saved. A fresh baseline read of guardian-recovery.txt succeeded with HERMES_GUARDIAN_RECOVERY_OK. Two reads each of guardian-recovery.txa and guardian-recovery.txb failed. The viewer confirmed two independent identical_failure incidents, ec92443fe893 and 115eedc6df7a, each attempts 2, BLOCK_RETRIES and escalations 0 in Enforce mode. The local primary model now reported both generated Guardian notices.
+
+The user explicitly approved one public packet for each incident, with no absolute paths, credentials or raw transcript. Packet hashes: 2ea23bbc9313da7ca810246be8ae2b59597e801166605770a70c81c7797ed6de and af6e4b3be6b62199801074a0c36b3efdf15775a113a56d883b24238402b2094c. Each real consultation returned valid advice with confidence 0.98, unresolved false and additional_evidence_required empty. Both entered PROPOSED_FIX with escalations 1. Both explicitly required evidence review, exact-operation approval, native approval and subsequent outcome verification; neither claimed independent system access or executed anything.
+
+Prepared an exact path-only read_file operation for the existing public fixture and a marker-based success criterion. The user manually clicked the Guardian evidence-review/one-attempt authorization. Refreshed history confirmed ec92443fe893 at SINGLE_RETRY with action_approved true and the exact criterion. Requested that one exact operation in the local primary-model chat. Hermes displayed its real Approval needed card, Guardian: approve this single corrective attempt. The user was asked to review and Run once, without Always allow. Execution and resolution are not yet reported as passed at this point.
