@@ -17,8 +17,9 @@ Status: acceptance incomplete; do not interpret automated passes as a blanket pr
 | Concurrent send and retry reservations | PASS | ReleaseGates; one logical consultation/one native approval |
 | Expert remains text-only and host-routed | PASS | runtime probe and neutral-registration tests |
 | Configurable Expert picker | PASS | Actual Hermes provider/model controls inspected |
+| Latest-version live post-consultation veto | PASS on 0.1.5 | Expanded real tool error shows Guardian incident f141f3b843f5 and ESCALATE_TO_USER |
 | Live successful recovery/native approval UI | PENDING | New 0.1.5 real advice had confidence 0.98 and unresolved true; retry correctly stayed blocked |
-| Latest-version live Telegram round trip | PENDING | Prior actual round trip passed on 0.1.3; bridge source/settings untouched |
+| Latest-version live Telegram round trip | PASS on 0.1.5 | Exact GUARDIAN_BRIDGE_015_OK reply in a new test topic; bridge settings untouched |
 | Real provider timeout/fallback acceptance | PENDING | Synthetic timeout and real host approval-timeout handling pass; provider transport not induced to time out |
 
 The user explicitly authorized local automated checks in addition to frontend testing on this date, superseding the earlier frontend-only constraint. All local release gates use synthetic data and temporary databases/profiles. No default-profile settings are altered by those scripts. The worker-death test terminates only its own disposable Python worker, not Hermes or another application.
