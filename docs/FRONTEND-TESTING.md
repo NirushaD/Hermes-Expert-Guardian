@@ -143,3 +143,12 @@ Current outcome: complete automated suite (45), frontend simulations (40), exact
 After explicit replacement approval and the user unlocking the PC, removed 0.1.5 through the ordinary Hermes dialog. It required deleting only plugin files, not saved history. Used the standard Git subtree source in the default profile, pinned to 421ac95598b7579b0e109d07dd9311afd5c31318, with Force reinstall off. The plugin inventory then showed Expert Guardian v0.1.6 Agent + Desktop pinned at 421ac955, alongside the ordinary custom/unreviewed-source notice. No security override was used and no blocking scanner finding appeared.
 
 The next screen capture timed out with FrameArrived timed out. Refreshed window selection and retried once; capture timed out again. Stopped UI input rather than acting on stale coordinates. Asked the user to reopen and foreground Hermes so backend reload, 42 frontend simulations and live recovery/denial checks can continue. Those latest frontend checks are not yet reported as passed. No native recovery approval was requested or bypassed.
+
+
+## 2 November: clean 0.1.6 backend reload and frontend checks
+
+After screen capture recovered, the plugin list again showed 0.1.6 at 421ac955. The first frontend simulation response contained only the old 40 checks, demonstrating a cached backend; it was not counted as a 0.1.6 pass. Closed Desktop completely, verified its window disappeared, and relaunched the existing installed executable. Backend became ready in a new window.
+
+The runner then returned passed true with exactly 42 checks, zero real tools and zero cloud requests, including missing prerequisite evidence remains stopped and missing prerequisite evidence cannot arm recovery. This confirms the new backend code is loaded. The retained chat remained visible; no history reset was used.
+
+Direct Agent-settings inspection showed Monitor and Expert off, as expected after replacement. Opened those controls and asked the user to restore Enforce and Expert manually under the computer-use security-settings rule. Live recovery/denial remains pending; no new Expert packet has yet been sent on 0.1.6.
