@@ -17,12 +17,12 @@ Status: acceptance incomplete; do not interpret automated passes as a blanket pr
 | Concurrent send and retry reservations | PASS | ReleaseGates; one logical consultation/one native approval |
 | Expert remains text-only and host-routed | PASS | runtime probe and neutral-registration tests |
 | Configurable Expert picker | PASS | Actual Hermes provider/model controls inspected |
-| Live successful recovery/native approval UI | PENDING | Last live Expert advice had unresolved true; retry correctly stayed blocked |
+| Live successful recovery/native approval UI | PENDING | New 0.1.5 real advice had confidence 0.98 and unresolved true; retry correctly stayed blocked |
 | Latest-version live Telegram round trip | PENDING | Prior actual round trip passed on 0.1.3; bridge source/settings untouched |
 | Real provider timeout/fallback acceptance | PENDING | Synthetic timeout and real host approval-timeout handling pass; provider transport not induced to time out |
 
 The user explicitly authorized local automated checks in addition to frontend testing on this date, superseding the earlier frontend-only constraint. All local release gates use synthetic data and temporary databases/profiles. No default-profile settings are altered by those scripts. The worker-death test terminates only its own disposable Python worker, not Hermes or another application.
 
-For live acceptance, restore Enforce and Expert enabled manually after plugin replacement, verify the intended Expert destination, and use a new public-fixture incident. Any new outbound packet still needs explicit review/approval. Existing unresolved incidents must not be reset or force-promoted to obtain a successful test. Native security approval prompts require user interaction under the computer-use rules.
+The user has now restored Enforce and Expert enabled and selected the intended Expert destination. A fresh public-fixture incident and approved consultation were exercised; the real response remained explicitly unresolved. Any new outbound packet still needs explicit review/approval. Existing unresolved incidents must not be reset or force-promoted to obtain a successful test. Native security approval prompts require user interaction under the computer-use rules.
 
 Supported scope is deterministic, bounded loop prevention and manually approved advisory escalation. It is not a command sandbox or a guarantee about arbitrary equivalent scripts, natural-language infrastructure assumptions, or host callbacks that never execute. Host retry/fallback policy and transport cancellation remain host boundaries. Do not weaken privacy, scanning, unresolved-advice checks or human approvals to close a test gate.

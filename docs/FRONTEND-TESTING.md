@@ -118,3 +118,12 @@ The user explicitly allowed local automated checks in addition to frontend testi
 The installed Hermes compatibility probe passes manifest, registration, native veto and text-only facade checks. Extended the probe to use the actual native approval resolver with mocked human approval, denial, timeout and gate exception; all four cases pass, with no real tool or provider calls and no default-profile mutation. This does not claim a live native UI click test.
 
 The actual install-time gate was rerun against the unchanged 0.1.5 runtime subtree using community trust, scanning enabled, force false, no reviewed catalog pin and no decision callback. Result: safe, zero findings, ALLOWED. Machine-readable evidence is install-scan-0.1.5.json. Full readiness remains subject to the live gates in PRODUCTION-READINESS.md.
+
+
+## Saved configuration and new live 0.1.5 consultation
+
+The user manually saved Enforce and Expert enabled and explicitly selected an Expert provider/model. Verified Enforce, disabled Save settings (saved state), and the enabled Expert toggle in the frontend. The Expert auxiliary row showed the selected existing subscription provider/model rather than auto inheritance.
+
+In the retained default-profile local-model chat, read_file of guardian-recovery.txt succeeded and returned HERMES_GUARDIAN_RECOVERY_OK, followed by two identical failures for a fresh guardian-recovery.txtx typo. The model incorrectly claimed no Guardian incident; the viewer confirmed f141f3b843f5, identical_failure, attempts 2, BLOCK_RETRIES, escalations 0 and mode enforce.
+
+Prepared minimal public evidence describing those three calls without absolute paths or raw transcripts. After explicit exact-packet approval, sent once (hash 05f58051f29afb92109ec3cb1e9e89f1f6786b8b071a79061cb24c8b3de9b04a). The configured Expert returned valid structured advice with confidence 0.98, no validation failure, and unresolved true. It identified the extension typo and recommended one approved read, but requested supporting public fixture logs and threshold-permission evidence. The persisted record had escalations 1, egress_approved true and ESCALATE_TO_USER. No retry was armed, no native corrective permission was requested, and no corrective operation ran. Successful live recovery remains unverified. We did not alter the advice or gate, reset the incident, or repeat its consultation.
