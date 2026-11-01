@@ -28,7 +28,8 @@ function Settings({ ctx }) {
     button('Refresh incidents', async()=>{try{setResult(await ctx.rest('/incident?session='+encodeURIComponent(session)))}catch{host.notify({kind:'error',message:'Cannot load incidents'})}}),
     field('Public problem description (no secrets)',description,setDescription),field('Intended outcome / success criteria',outcome,setOutcome),
     button('Prepare diagnostic preview',()=>act('prepare',{description,outcome})),
-    button('Approve sending preview to Codex',()=>{
+    jsx('p',{children:'Choose your preferred provider and model in Hermes → Model → Auxiliary models → Expert. Hermes manages authentication and routing. Review that destination before approving a packet.'}),
+    button('Approve sending preview to Expert',()=>{
       const item=result?.incidents?.find(i=>i.id===incident)
       if(!item?.packet_hash || item.state!=='AWAIT_EGRESS_APPROVAL') {host.notify({kind:'info',message:'Refresh incidents and review the exact packet before approving.'});return}
       act('send',{packet_hash:item.packet_hash})

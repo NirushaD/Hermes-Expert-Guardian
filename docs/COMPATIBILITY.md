@@ -12,12 +12,14 @@ Inspected installed source commit `d923a5eb487a17c0a68801bba9ef0f56c81040a8`. It
 | Desktop | Unified desktop/plugin.js plus dashboard backend supported; official Desktop surface admission passes; live UI untested |
 | Windows | Python 3.14.7 local unit tests; explicit SQLite close fixes Windows lock handling |
 | LM Studio | Uses ordinary tool lifecycle; no LM Studio connection exercised |
-| Codex | Existing root Review provider/model observed; actual external call deliberately not made |
+| Expert | Existing root Review provider/model observed; actual external call deliberately not made |
 | Telegram bridge | Existing enabled plugin observed; Guardian registers no platform/message handlers and changes no bridge settings; simultaneous live operation untested |
 | Manual approval | Desktop profile `approvals.mode: manual` observed; recovery returns supported approve directive; live approval UX untested |
 | Host isolation | Official admission classifies package host-ready; full hosted RPC/UI round trip untested |
 
-Actual settings: Desktop profile primary `lmstudio / google/gemma-4-26b-a4b-qat`; root primary and Review `openai-codex / gpt-6.1-sol`. No explicit Desktop auxiliary review configuration was present. Intended 30 agent steps, 15 subagent turns, one parallel subagent, 180 seconds and enabled redaction were not established from explicit saved keys. They are not reported as verified effective settings. No defaults or intended values were written back.
+Actual settings: Desktop profile primary `lmstudio / google/gemma-4-26b-a4b-qat`; root primary and Review used the existing user-selected provider/model. No explicit Desktop auxiliary review configuration was present. Intended 30 agent steps, 15 subagent turns, one parallel subagent, 180 seconds and enabled redaction were not established from explicit saved keys. They are not reported as verified effective settings. No defaults or intended values were written back.
+
+The table and settings above describe the initial development inspection. Later live Desktop, Expert and Telegram evidence is recorded in [frontend testing](FRONTEND-TESTING.md). Provider names in historical prose are generalized as Expert; this does not claim a different provider was used.
 
 ## Material limits
 
@@ -31,7 +33,7 @@ Actual settings: Desktop profile primary `lmstudio / google/gemma-4-26b-a4b-qat`
 - A timeout is passed to the supported host API. Host provider retry/fallback and queueing semantics can exceed wall-clock timeout; no claim of hard cancellation of host requests. Provider transport can retry a single logical consultation. Failures leave blocks intact.
 - Incident persistence survives turns/restarts. on_session_end is turn-scoped, so clearing there would defeat enforcement. Terminal session closure cleanup is unavailable here; explicit reset and 30-day inactive resolved-record expiry are provided. Unresolved blocks are retained. Maximum 512 session records, 64 events/incidents per session, 128 pending calls; reaching capacity requires user cleanup and blocks in Enforce mode.
 - Reset deliberately releases blocks and deletes history. Mode/enable settings are user controls, not security barriers against code running with local account privileges.
-- No live Desktop UI, real Codex connection, bridge integration, or Proxmox test has been performed. This is a tested development release, not a claim of complete production acceptance.
+- No live Desktop UI, real Expert connection, bridge integration, or Proxmox test has been performed. This is a tested development release, not a claim of complete production acceptance.
 
 The installed runtime also has built-in tool-loop guardrails (`agent/agent_init.py` loads `agent.tool_loop_guardrails`). Guardian does not disable or replace those. Native guardrails and approvals continue independently.
 

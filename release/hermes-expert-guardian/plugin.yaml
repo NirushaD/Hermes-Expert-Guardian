@@ -1,5 +1,5 @@
 name: hermes-expert-guardian
-version: "0.1.4"
+version: "0.1.5"
 description: "Deterministic loop monitoring, session-scoped retry vetoes and approved text-only expert advice."
 author: "Hermes Expert Guardian contributors"
 manifest_version: 2
@@ -10,5 +10,5 @@ config_schema:
   identical_failures: {type: int, default: 2}
   unsuccessful_approaches: {type: int, default: 3}
   no_progress: {type: int, default: 5}
-  expert_enabled: {type: bool, default: false, description: "Allow manually approved text-only Codex consultations"}
+  expert_enabled: {type: bool, default: false, description: "Allow manually approved text-only Expert consultations"}
   expert_timeout: {type: int, default: 60, description: "Host provider timeout in seconds (5–180)"}

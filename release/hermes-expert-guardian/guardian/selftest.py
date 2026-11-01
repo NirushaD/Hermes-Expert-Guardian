@@ -25,6 +25,18 @@ def run():
     def check(name, condition):
         checks.append({"name": name, "passed": bool(condition)})
 
+    from .integration import register
+    registrations = []
+    class RegistrationContext:
+        def register_auxiliary_task(self, key, **metadata):
+            registrations.append((key, metadata))
+        def register_hook(self, name, callback):
+            pass  # Registration alone must not initialize profile state or a provider.
+    register(RegistrationContext())
+    key, metadata = registrations[0]
+    check("Expert slot keeps saved routing key", key == "guardian_expert" and metadata["display_name"] == "Expert")
+    check("Expert slot has no vendor defaults", not {"provider", "model", "base_url", "api_key"}.intersection(metadata["defaults"]))
+
     advice = {"root_cause": "Synthetic missing resource", "confidence": .9,
               "verified_facts": [], "additional_evidence_required": [],
               "recommended_corrective_action": "Read the public fixture", "commands": [],
@@ -67,6 +79,8 @@ def run():
         check("exact packet approval", not requests)
     guardian.send("simulation", item["id"], item["packet_hash"])
     check("text-only fake request", len(requests) == 1 and "tools" not in requests[0])
+    check("Expert routing remains host controlled", requests[0]["task"] == "guardian_expert" and
+          not {"provider", "model", "agent_id", "profile"}.intersection(requests[0]))
     try:
         guardian.send("simulation", item["id"], item["packet_hash"])
         check("one consultation", False)
@@ -114,5 +128,44 @@ def run():
         stopped = guardian.view(category)["incidents"][0]
         check(category + " is safely classified", stopped.get("expert_failure") == category and stopped["state"] == "ESCALATE_TO_USER" and stopped.get("advice") is None)
         check(category + " retains no raw response", response not in json.dumps(stopped))
+    for label, changed in (("unresolved advice", {"unresolved": True}),
+                           ("low confidence advice", {"confidence": .5})):
+        class CautiousExpert:
+            def complete(self, **kwargs):
+                return SimpleNamespace(text=json.dumps(dict(advice, **changed)))
+        cautious = Guardian(MemoryStore(), lambda k, d: settings.get(k, d), CautiousExpert())
+        for _ in range(2):
+            cautious.post("read_file", arguments, session_id=label, status="error", result={"error": "Synthetic error"})
+        item = cautious.view(label)["incidents"][0]
+        cautious.prepare(label, item["id"], "Synthetic local failure", "Read succeeds")
+        item = cautious.view(label)["incidents"][0]
+        check(label + " remains stopped", cautious.send(label, item["id"], item["packet_hash"]) == "ESCALATE_TO_USER")
+        try:
+            cautious.authorize(label, item["id"], "read_file", arguments, "Read succeeds")
+            check(label + " cannot arm recovery", False)
+        except ValueError:
+            check(label + " cannot arm recovery", True)
+    for terminal_status in ("cancelled", "error"):
+        recovery = Guardian(MemoryStore(), lambda k, d: settings.get(k, d), FakeExpert())
+        for _ in range(2):
+            recovery.post("read_file", arguments, session_id=terminal_status, status="error", result={"error": "Synthetic error"})
+        item = recovery.view(terminal_status)["incidents"][0]
+        recovery.prepare(terminal_status, item["id"], "Synthetic local failure", "Read succeeds")
+        item = recovery.view(terminal_status)["incidents"][0]
+        recovery.send(terminal_status, item["id"], item["packet_hash"])
+        recovery.authorize(terminal_status, item["id"], "read_file", arguments, "Read succeeds")
+        mismatch = recovery.pre("read_file", dict(arguments, limit=1), session_id=terminal_status, tool_call_id="mismatch")
+        check(terminal_status + " mismatched operation blocked", mismatch["action"] == "block")
+        native = recovery.pre("read_file", arguments, session_id=terminal_status, tool_call_id="recovery")
+        check(terminal_status + " exact recovery requests native approval", native["action"] == "approve")
+        recovery.post("read_file", arguments, session_id=terminal_status, tool_call_id="recovery", status=terminal_status,
+                      result={"error": "Synthetic denied or failed recovery"})
+        try:
+            recovery.resolve(terminal_status, item["id"])
+            check(terminal_status + " cannot resolve", False)
+        except ValueError:
+            check(terminal_status + " cannot resolve", True)
+        check(terminal_status + " cannot retry again", recovery.pre("read_file", arguments, session_id=terminal_status,
+              tool_call_id="second")["action"] == "block")
     return {"simulation_only": True, "real_tools_executed": 0, "cloud_requests": 0,
             "passed": all(c["passed"] for c in checks), "checks": checks}

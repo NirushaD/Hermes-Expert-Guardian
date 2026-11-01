@@ -24,9 +24,9 @@ def create(ctx=None):
 
 
 def register(ctx):
-    ctx.register_auxiliary_task("guardian_expert", display_name="Expert Guardian",
-        description="Approved diagnostic packets only; text-only independent advice",
-        defaults={"provider": "openai-codex", "model": "gpt-6.1-sol", "timeout": 60})
+    ctx.register_auxiliary_task("guardian_expert", display_name="Expert",
+        description="Guardian: approved diagnostic packets only; text-only independent advice",
+        defaults={"timeout": 60})
     # Lazy initialization keeps plugin discovery and admission read-only.
     def pre(**kwargs):
         try:

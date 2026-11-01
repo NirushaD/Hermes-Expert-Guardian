@@ -1,4 +1,4 @@
-# Hermes Expert Guardian 0.1.4
+# Hermes Expert Guardian 0.1.5
 
 Runtime-only plugin package. Default: monitor-only, expert escalation disabled.
 
@@ -8,7 +8,7 @@ https://github.com/NirushaD/Hermes-Expert-Guardian/tree/main/release/hermes-expe
 
 This is the supported Git subdirectory syntax. The repository root retains development tests and evidence. The installer scans all files in this runtime subtree under its standard community-source policy. No scanner exclusions or overrides are required.
 
-Enable the agent plugin for the intended profile and the Desktop interface. Keep Manual approvals and monitor mode during initial testing. Configure the Expert Guardian auxiliary-model slot in Desktop to use openai-codex / gpt-6.1-sol, with Hermes managing authentication. This does not replace Review or the primary model.
+Enable the agent plugin for the intended profile and the Desktop interface. Keep Manual approvals and monitor mode during initial testing. In Desktop → Model → Auxiliary models → Expert, select your preferred provider and model. Guardian supplies no provider/model defaults; Hermes uses its normal fallback routing when no selection is saved. Review the destination before approving a packet. Hermes manages authentication. Existing saved guardian_expert selections remain effective. This does not replace Review or the primary model.
 
 In the Guardian settings page, enter the affected session and incident IDs. Refresh incidents, enter a minimal public description and intended outcome, and prepare a diagnostic preview. Refresh again and review the exact packet before approving cloud submission. Do not paste sensitive material. Egress is always manually approved and tied to the preview hash.
 

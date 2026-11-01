@@ -42,7 +42,7 @@ with tempfile.TemporaryDirectory(dir=workspace/'.reference') as scratch:
     captured=[]
     def caller(**kwargs):
         captured.append(kwargs)
-        return 'openai-codex','gpt-6.1-sol',{'choices':[{'message':{'content':'advice'}}]}
+        return 'synthetic-provider','synthetic-expert-model',{'choices':[{'message':{'content':'advice'}}]}
     llm=PluginLlm(plugin_id='hermes-expert-guardian',sync_caller=caller)
     with patch('agent.plugin_llm._resolve_task_ownership',return_value=({'guardian_expert'},set())):
         llm.complete(messages=[{'role':'user','content':'Synthetic public diagnostic'}],task='guardian_expert')
