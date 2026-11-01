@@ -1,6 +1,6 @@
 # Production acceptance status — 1 November 2026
 
-Candidate: Guardian 0.1.6, runtime source commit 421ac95598b7579b0e109d07dd9311afd5c31318. Installed plugin remains 0.1.5 until the Desktop replacement completes. Installed runtime: Hermes d923a5eb487a17c0a68801bba9ef0f56c81040a8, Desktop 0.22.2, Windows.
+Candidate: Guardian 0.1.6, runtime source commit 421ac95598b7579b0e109d07dd9311afd5c31318. Desktop inventory now lists 0.1.6 at the exact approved pin; backend reload verification awaits working screen capture. Installed runtime: Hermes d923a5eb487a17c0a68801bba9ef0f56c81040a8, Desktop 0.22.2, Windows.
 
 Status: acceptance incomplete; do not interpret automated passes as a blanket production certification.
 
@@ -10,7 +10,7 @@ Status: acceptance incomplete; do not interpret automated passes as a blanket pr
 | Shipped frontend simulations | 0.1.5: 40 frontend passes; 0.1.6: 42 engine checks pass in full suite, frontend reload pending | FRONTEND-TESTING.md |
 | Runtime-only package/source identity | PASS | ReleaseTests in full suite |
 | Actual installation security scanner | safe, zero findings, ALLOWED | install-scan-0.1.6.json; plugin-guard-v11; community source; force false |
-| Standard Desktop Git installation | 0.1.5 passed; 0.1.6 pending desktop access and replacement | FRONTEND-TESTING.md |
+| Standard Desktop Git installation | 0.1.6 accepted by standard installer; inventory lists exact pin; final reload checks pending | FRONTEND-TESTING.md |
 | Installed SDK registration and real veto resolver | PASS | tests/runtime_probe.py |
 | Installed native approval resolver | PASS for approve, deny, timeout, error with mocked human responses | tests/runtime_probe.py; temporary profile; zero real tool/provider calls |
 | SQLite rollback after worker process death | PASS | test_process_death_rolls_back_uncommitted_state |
