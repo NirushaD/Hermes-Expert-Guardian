@@ -1,0 +1,16 @@
+{
+  "result": "pass",
+  "transport": "real delayed loopback HTTP via installed Hermes",
+  "delay_seconds": 7,
+  "request_timeout_seconds": 5,
+  "elapsed_seconds": 23.35,
+  "logical_consultations": 1,
+  "host_http_attempts": 3,
+  "state": "ESCALATE_TO_USER",
+  "expert_failure": "timeout",
+  "retries_blocked": true,
+  "repeated_consultation_refused": true,
+  "non_loopback_sockets_refused": true,
+  "real_credentials_used": false,
+  "production_profile_modified": false
+}

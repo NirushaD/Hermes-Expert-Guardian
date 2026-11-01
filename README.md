@@ -1,4 +1,4 @@
-# Hermes Expert Guardian 0.1.5
+# Hermes Expert Guardian 0.1.6
 
 A conservative, installable **development release**, implemented against the installed Hermes Agent commit `d923a5eb487a17c0a68801bba9ef0f56c81040a8` on Windows 11. This is not a certification that every requirement of the original specification is complete. Read [limitations](docs/COMPATIBILITY.md) before enforcement.
 
@@ -37,7 +37,7 @@ For an installed SDK compatibility probe, use its Python with `tests/runtime_pro
 
 Manifest-generated controls: enabled, monitor/enforce, identical failures, unsuccessful approaches, no-progress threshold, expert enabled, timeout (5–180 seconds). The maximum is fixed at one expert consultation and one corrective attempt per incident. Egress approval is mandatory; automatic sending is intentionally unavailable. Provider/model selection uses the supported auxiliary-model settings rather than duplicate text fields.
 
-The Desktop page provides incident history, packet preview, send approval/denial, recovery authorization, explicit success verification, and reset/history deletion for a session. Session IDs are entered explicitly to avoid selecting the wrong active profile/session. An API objective action exists for integrations, but there is no objective control on the current page. Run local safeguard simulations (no cloud) executes 40 bounded engine checks in the Hermes frontend. These simulations do not replace the complete development suite or live native approval acceptance. The first approved consultation is the live connection check.
+The Desktop page provides incident history, packet preview, send approval/denial, recovery authorization, explicit success verification, and reset/history deletion for a session. Session IDs are entered explicitly to avoid selecting the wrong active profile/session. An API objective action exists for integrations, but there is no objective control on the current page. Run local safeguard simulations (no cloud) executes 42 bounded engine checks in the Hermes frontend. These simulations do not replace the complete development suite or live native approval acceptance. The first approved consultation is the live connection check.
 
 ## Rollback and uninstall
 

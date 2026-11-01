@@ -12,6 +12,7 @@ from guardian.integration import register
 from guardian.selftest import run
 from guardian.service import Guardian
 from guardian.state import Store
+from guardian import expert
 
 
 ADVICE = dict(root_cause="Public fixture typo", confidence=.95, verified_facts=[],
@@ -51,7 +52,7 @@ class ReleaseGates(unittest.TestCase):
     def test_all_frontend_engine_checks(self):
         result = run()
         self.assertTrue(result["passed"], result["checks"])
-        self.assertEqual(len(result["checks"]), 40)
+        self.assertEqual(len(result["checks"]), 42)
         self.assertEqual((result["real_tools_executed"], result["cloud_requests"]), (0, 0))
 
     def test_neutral_registration_preserves_user_routing_key(self):
@@ -163,3 +164,43 @@ os._exit(17)
         record = self.guardian.view("release")["incidents"][0]
         self.assertEqual(record["expert_failure"], "response_withheld")
         self.assertNotIn("synthetic-rejected-value", json.dumps(record))
+
+    def test_pending_material_evidence_blocks_even_positive_verdict(self):
+        item = self.prepared()
+        self.guardian.llm = SimpleNamespace(complete=lambda **kwargs: SimpleNamespace(text=json.dumps(
+            dict(ADVICE, additional_evidence_required=["Verify the target mapping before acting"])) ))
+        self.assertEqual(self.guardian.send("release", item["id"], item["packet_hash"]), "ESCALATE_TO_USER")
+        with self.assertRaises(ValueError):
+            self.guardian.authorize("release", item["id"], "read_file", self.args, "Read succeeds")
+
+    def test_empty_diagnosis_or_action_rejected(self):
+        for field in ("root_cause", "recommended_corrective_action"):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                expert.validate_response(dict(ADVICE, **{field: "   "}))
+
+    def test_contract_distinguishes_proposal_from_verified_resolution(self):
+        self.armed()
+        instructions = self.calls[0]["messages"][0]["content"]
+        self.assertIn("does not execute it or resolve the incident", instructions)
+        self.assertIn("Never suppress a material evidence gap", instructions)
+        self.assertIn("a nonempty list blocks recovery", instructions)
+
+    def test_wrapped_typed_timeout_is_classified_without_exception_text(self):
+        try:
+            import httpx
+        except ImportError:
+            self.skipTest("Transport library available in Hermes Python")
+        item = self.prepared()
+        def timed_out(**kwargs):
+            try:
+                raise httpx.ReadTimeout("Synthetic transport detail never retained")
+            except httpx.ReadTimeout as cause:
+                raise RuntimeError("Synthetic wrapper never retained") from cause
+        self.guardian.llm = SimpleNamespace(complete=timed_out)
+        self.guardian.send("release", item["id"], item["packet_hash"])
+        record = self.guardian.view("release")["incidents"][0]
+        self.assertEqual(record["expert_failure"], "timeout")
+        self.assertNotIn("never retained", json.dumps(record))
+
+    def test_timeout_words_do_not_misclassify_generic_error(self):
+        self.assertFalse(expert.is_timeout(RuntimeError("Timeout mentioned in untrusted provider text")))

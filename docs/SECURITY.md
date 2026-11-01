@@ -12,7 +12,7 @@ The cloud request contains only two text messages. ctx.llm is a single completio
 
 ## Responses and recovery
 
-Strict field/type/bounds validation rejects malformed, oversized, suspicious or uncertain advice without echoing raw invalid output. Confidence below 0.8 or unresolved=true stops recovery. A response is advisory only. Every corrective operation requires user review of evidence, exact operation fingerprint authorization, a nonempty success criterion, and a native approve directive. The corrective call is consumed atomically before approval; denied approval cannot re-arm it. Only explicit user verification after a successful tool outcome resolves the incident.
+Strict field/type/bounds validation rejects malformed, oversized, suspicious or uncertain advice without echoing raw invalid output. Confidence below 0.8, unresolved=true, or any outstanding additional_evidence_required stops recovery. Blank diagnosis/action fields are rejected. The Expert contract distinguishes diagnostic uncertainty from an approved correction awaiting execution; incident resolution is never granted by an Expert response. A response is advisory only. Every corrective operation requires user review of evidence, exact operation fingerprint authorization, a nonempty success criterion, and a native approve directive. The corrective call is consumed atomically before approval; denied approval cannot re-arm it. Only explicit user verification after a successful tool outcome resolves the incident.
 
 ## Persistence and concurrency
 

@@ -129,7 +129,8 @@ def run():
         check(category + " is safely classified", stopped.get("expert_failure") == category and stopped["state"] == "ESCALATE_TO_USER" and stopped.get("advice") is None)
         check(category + " retains no raw response", response not in json.dumps(stopped))
     for label, changed in (("unresolved advice", {"unresolved": True}),
-                           ("low confidence advice", {"confidence": .5})):
+                           ("low confidence advice", {"confidence": .5}),
+                           ("missing prerequisite evidence", {"additional_evidence_required": ["Verify target exists"]})):
         class CautiousExpert:
             def complete(self, **kwargs):
                 return SimpleNamespace(text=json.dumps(dict(advice, **changed)))

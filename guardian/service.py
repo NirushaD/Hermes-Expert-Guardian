@@ -158,16 +158,17 @@ class Guardian:
             timeout = self.config("expert_timeout", 60)
             timeout = max(5, min(180, timeout)) if type(timeout) is int else 60
             advice = expert.consult(self.llm, payload, timeout)
-            state = "PROPOSED_FIX" if advice["confidence"] >= .8 and not advice["unresolved"] else "ESCALATE_TO_USER"
+            state = "PROPOSED_FIX" if (advice["confidence"] >= .8 and not advice["unresolved"]
+                                      and not advice["additional_evidence_required"]) else "ESCALATE_TO_USER"
         except expert.ResponseRejected as error:
             advice, state = None, "ESCALATE_TO_USER"
             failure_code = error.code
         except TimeoutError:
             advice, state = None, "ESCALATE_TO_USER"
             failure_code = "timeout"
-        except Exception:
+        except Exception as error:
             advice, state = None, "ESCALATE_TO_USER"
-            failure_code = "provider_error"
+            failure_code = "timeout" if expert.is_timeout(error) else "provider_error"
         with self.store.session(session) as data:
             item = self.find(data, identity)
             if item["state"] == "EXPERT_CONSULTATION":
