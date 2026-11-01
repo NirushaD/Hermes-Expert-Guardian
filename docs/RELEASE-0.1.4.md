@@ -4,4 +4,4 @@ Consultations that fail or are rejected retain only an allowlisted failure categ
 
 Eight new frontend simulation checks cover safe failure categories and absence of rejected responses from stored incident data. This brings the frontend simulation set to 25 checks. These are not the full development suite.
 
-Package build and Python compilation completed. Desktop installation scan, frontend simulations and live consultation on this version are pending. No complete-readiness claim is made. The user retains a frontend-only testing constraint.
+Package build and Python compilation completed. The standard Desktop Git installation succeeded in the default profile, pinned to c0c71eba1b28ef5cc695ff420377294922df28fe, with Force reinstall off. After restarting Desktop, all 25 frontend simulations passed, reporting zero real tools and zero cloud requests. The installer UI did not expose a separate scanner verdict or finding count. Live successful recovery on this version remains pending. No complete-readiness claim is made. The user retains a frontend-only testing constraint.
