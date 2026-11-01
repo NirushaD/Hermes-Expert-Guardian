@@ -1,0 +1,22 @@
+{
+  "scan": {
+    "skill_name": "hermes-expert-guardian",
+    "source": "https://github.com/NirushaD/Hermes-Expert-Guardian/tree/main/release/hermes-expert-guardian",
+    "trust_level": "community",
+    "verdict": "safe",
+    "findings": [],
+    "scanned_at": "2026-11-01T10:38:00.854896+00:00",
+    "summary": "hermes-expert-guardian: clean scan, no threats detected",
+    "scan_provenance": {
+      "scanner_version": "plugin-guard-v11",
+      "verdict": "safe",
+      "source": "https://github.com/NirushaD/Hermes-Expert-Guardian/tree/main/release/hermes-expert-guardian"
+    }
+  },
+  "decision": "ALLOWED",
+  "policy_allowed": true,
+  "policy_reason": "Allowed (clean scan)",
+  "force": false,
+  "reviewed_pin": false,
+  "decision_callback": false
+}

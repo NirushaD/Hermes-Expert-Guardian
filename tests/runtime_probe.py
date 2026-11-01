@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
 from unittest.mock import patch
 
 parser=argparse.ArgumentParser()
@@ -47,6 +48,52 @@ with tempfile.TemporaryDirectory(dir=workspace/'.reference') as scratch:
     with patch('agent.plugin_llm._resolve_task_ownership',return_value=({'guardian_expert'},set())):
         llm.complete(messages=[{'role':'user','content':'Synthetic public diagnostic'}],task='guardian_expert')
     assert 'tools' not in captured[0]
-    print(json.dumps({'manifest':'pass','registration':'pass','native_block_directive':'pass','text_only_facade':'pass','production_modified':False}))
+    # Exercise the installed host's real approval resolver with fake human responses.
+    # No tool dispatch, provider call or Desktop profile is involved.
+    from hermes_cli.plugins import _get_pre_tool_call_directive_details, _resolve_block_from_details
+    advice = dict(root_cause='Synthetic public fixture typo', confidence=.95, verified_facts=[],
+                  additional_evidence_required=[], recommended_corrective_action='Read public fixture',
+                  commands=[], risks=[], rollback_considerations='No writes', user_approval_required=True,
+                  unresolved=False)
+    g.llm = SimpleNamespace(complete=lambda **kwargs: SimpleNamespace(text=json.dumps(advice)))
+    context.set_config('expert_enabled', True)
+    approval_results = {}
+    for label, response in [('approved', {'approved':True}), ('denied', {'approved':False}),
+                            ('timeout', TimeoutError('Synthetic approval timeout')),
+                            ('gate_error', RuntimeError('Synthetic approval failure'))]:
+        session='native-'+label
+        arguments={'path':'public-fixture.txt'}
+        for _ in range(2):
+            g.post('read_file',arguments,session_id=session,status='error',result={'error':'Synthetic error'})
+        item=g.view(session)['incidents'][0]
+        g.prepare(session,item['id'],'Synthetic public fixture typo','Read succeeds')
+        item=g.view(session)['incidents'][0]
+        g.send(session,item['id'],item['packet_hash'])
+        g.authorize(session,item['id'],'read_file',arguments,'Read succeeds')
+        with patch('hermes_cli.lifecycle.invoke_hook',side_effect=invoke):
+            directive=_get_pre_tool_call_directive_details('read_file',arguments,session_id=session,tool_call_id='once')
+        assert directive.action=='approve' and directive.rule_key.startswith('guardian:'+item['id']+':')
+        mocked={'side_effect':response} if isinstance(response,Exception) else {'return_value':response}
+        with patch('tools.approval.request_tool_approval',**mocked) as approval:
+            blocked=_resolve_block_from_details(directive,'read_file',session_id=session,tool_call_id='once')
+        assert approval.call_count==1
+        assert (blocked is None)==(label=='approved')
+        g.post('read_file',arguments,session_id=session,tool_call_id='once',
+               status='ok' if label=='approved' else 'blocked',result={'success':label=='approved'})
+        assert g.pre('read_file',arguments,session_id=session,tool_call_id='second')['action']=='block'
+        if label=='approved':
+            g.resolve(session,item['id'])
+            assert g.view(session)['incidents'][0]['state']=='RESOLVED'
+        else:
+            try:
+                g.resolve(session,item['id'])
+            except ValueError:
+                pass
+            else:
+                raise AssertionError('Unapproved native result resolved')
+        approval_results[label]='pass'
+    print(json.dumps({'manifest':'pass','registration':'pass','native_block_directive':'pass',
+                     'text_only_facade':'pass','native_approval_resolver':approval_results,
+                     'real_tools_executed':0,'cloud_requests':0,'production_modified':False}))
 
 

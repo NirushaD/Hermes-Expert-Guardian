@@ -109,3 +109,12 @@ After closing and reopening the existing Desktop app, all 40 frontend safeguard 
 The Guardian page visibly says Approve sending preview to Expert and explains how to choose the destination. Hermes Model > Auxiliary models showed Expert with the Guardian description and auto/use main model. Opening Change exposed separate Expert provider, Expert model and reasoning controls. The provider menu offered LM Studio, the existing subscription provider, and DeepSeek. Cancelled without applying changes. Native Hermes vendor names remain native host labels; the plugin source, package and documentation no longer reference a particular Expert vendor. Removing provider/model defaults does not remove existing user-saved guardian_expert overrides.
 
 Reinstallation restores the plugin defaults (Monitor, Expert escalation off); no security settings or provider choices were changed by automation. Successful live recovery/native approval, a real transport timeout and the full latest development suite remain unverified. The prior real consultation was explicitly unresolved, so that incident was neither reset nor forced into recovery. Existing Telegram configuration was untouched; the previously verified round trip applies to 0.1.3.
+
+
+## Full local release validation authorized
+
+The user explicitly allowed local automated checks in addition to frontend testing. The complete suite ran using installed Hermes Python: 45 tests passed, no skips. It includes 13 new release gates covering concurrent consultation/recovery, stale preview approval, disabled Expert, missing identity/state failure, explicit success verification, denied callback immutability, rejected text retention, neutral routing, the 40 frontend-engine checks, and real rollback after a disposable Python worker exits inside a SQLite transaction.
+
+The installed Hermes compatibility probe passes manifest, registration, native veto and text-only facade checks. Extended the probe to use the actual native approval resolver with mocked human approval, denial, timeout and gate exception; all four cases pass, with no real tool or provider calls and no default-profile mutation. This does not claim a live native UI click test.
+
+The actual install-time gate was rerun against the unchanged 0.1.5 runtime subtree using community trust, scanning enabled, force false, no reviewed catalog pin and no decision callback. Result: safe, zero findings, ALLOWED. Machine-readable evidence is install-scan-0.1.5.json. Full readiness remains subject to the live gates in PRODUCTION-READINESS.md.
