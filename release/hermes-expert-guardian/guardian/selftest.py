@@ -95,6 +95,24 @@ def run():
         guardian.prepare(error_name, failure["id"], "Synthetic local failure", "Read succeeds")
         failure = guardian.view(error_name)["incidents"][0]
         guardian.send(error_name, failure["id"], failure["packet_hash"])
-        check(error_name + " stops safely", guardian.view(error_name)["incidents"][0]["state"] == "ESCALATE_TO_USER")
+        stopped = guardian.view(error_name)["incidents"][0]
+        check(error_name + " stops safely", stopped["state"] == "ESCALATE_TO_USER")
+        check(error_name + " has safe failure category", stopped.get("expert_failure") == ("timeout" if error_name == "timeout" else "provider_error"))
+    withheld = dict(advice, root_cause="password=synthetic")
+    for category, response in (("invalid_json", "not JSON"), ("invalid_response", "{}"),
+                               ("response_withheld", json.dumps(withheld))):
+        class RejectedExpert:
+            def complete(self, **kwargs):
+                return SimpleNamespace(text=response)
+        guardian.llm = RejectedExpert()
+        for _ in range(2):
+            guardian.post("read_file", arguments, session_id=category, status="error", result={"error": "Synthetic error"})
+        failure = guardian.view(category)["incidents"][0]
+        guardian.prepare(category, failure["id"], "Synthetic local failure", "Read succeeds")
+        failure = guardian.view(category)["incidents"][0]
+        guardian.send(category, failure["id"], failure["packet_hash"])
+        stopped = guardian.view(category)["incidents"][0]
+        check(category + " is safely classified", stopped.get("expert_failure") == category and stopped["state"] == "ESCALATE_TO_USER" and stopped.get("advice") is None)
+        check(category + " retains no raw response", response not in json.dumps(stopped))
     return {"simulation_only": True, "real_tools_executed": 0, "cloud_requests": 0,
             "passed": all(c["passed"] for c in checks), "checks": checks}

@@ -15,15 +15,19 @@ SENSITIVE = re.compile("(" + "|".join(SENSITIVE_PATTERNS) + ")", re.IGNORECASE)
 OPAQUE = re.compile(r"[A-Za-z0-9+/=_-]{32,}")
 
 
+class PrivacyBoundaryError(ValueError):
+    """A fixed classification; never includes rejected text."""
+
+
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()
 
 
 def safe_text(value, limit=800):
     if not isinstance(value, str) or len(value) > limit:
-        raise ValueError("Text exceeds privacy boundary")
+        raise PrivacyBoundaryError("Text exceeds privacy boundary")
     if SENSITIVE.search(value) or OPAQUE.search(value):
-        raise ValueError("Sensitive or uncertain text withheld; enter a minimal public description")
+        raise PrivacyBoundaryError("Sensitive or uncertain text withheld; enter a minimal public description")
     return value
 
 

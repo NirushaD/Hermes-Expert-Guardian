@@ -1,5 +1,5 @@
 name: hermes-expert-guardian
-version: "0.1.3"
+version: "0.1.4"
 description: "Deterministic loop monitoring, session-scoped retry vetoes and approved text-only expert advice."
 author: "Hermes Expert Guardian contributors"
 manifest_version: 2

@@ -1,6 +1,13 @@
 """Single text-only host call. No agent, delegation, tools, or credential handling."""
 import json
-from .privacy import safe_text, validate_packet
+from .privacy import PrivacyBoundaryError, safe_text, validate_packet
+
+
+class ResponseRejected(ValueError):
+    """Only allowlisted failure codes may reach incident history."""
+    def __init__(self, code):
+        self.code = code if code in {"invalid_json", "invalid_response", "response_withheld"} else "invalid_response"
+        super().__init__(self.code)
 
 FIELDS = {"root_cause": str, "confidence": float, "verified_facts": list,
           "additional_evidence_required": list, "recommended_corrective_action": str,
@@ -42,4 +49,13 @@ def consult(llm, data, timeout):
         task="guardian_expert", timeout=timeout,
         max_tokens=1600, purpose="guardian.advice")
     # No raw response in logs or user context if validation fails.
-    return validate_response(json.loads(result.text))
+    try:
+        value = json.loads(result.text)
+    except (ValueError, TypeError, AttributeError):
+        raise ResponseRejected("invalid_json") from None
+    try:
+        return validate_response(value)
+    except PrivacyBoundaryError:
+        raise ResponseRejected("response_withheld") from None
+    except (ValueError, TypeError):
+        raise ResponseRejected("invalid_response") from None
