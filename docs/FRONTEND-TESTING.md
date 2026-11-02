@@ -166,3 +166,6 @@ Prepared an exact path-only read_file operation for the existing public fixture 
 ## 2 November: actual native-approved recovery execution
 
 After the user physically clicked Run in Hermes, expanded the actual read_file tool card in the retained acceptance chat. It contained `1|HERMES_GUARDIAN_RECOVERY_OK` and the public fixture second line. Refreshed Guardian history independently confirmed incident ec92443fe893 had consumed true, retry_finished true, retry_ok true, escalations 1 and state ESCALATE_TO_USER. The success did not automatically resolve the incident or grant a second attempt. Explicit user outcome verification and the separate native-denial acceptance case remain pending. No additional read was submitted during the approval handoff.
+
+
+The user subsequently clicked I verified success criteria; resolve. Refreshed persisted history confirmed ec92443fe893 at RESOLVED with user_verified true, consumed true, retry_ok true and escalations 1. The full real success path, including native Run, output verification and manual incident resolution, passed. Prepared the independent incident 115eedc6df7a for native rejection; it is not yet counted as passed.

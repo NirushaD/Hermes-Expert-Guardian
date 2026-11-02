@@ -18,7 +18,7 @@ Status: acceptance incomplete; do not interpret automated passes as a blanket pr
 | Expert remains text-only and host-routed | PASS | runtime probe and neutral-registration tests |
 | Configurable Expert picker | PASS | Actual Hermes provider/model controls inspected |
 | Latest-version live post-consultation veto | PASS on 0.1.5 | Expanded real tool error shows Guardian incident f141f3b843f5 and ESCALATE_TO_USER |
-| Live successful recovery/native approval UI | Execution PASS on 0.1.6; explicit user resolution pending | Real native Run, expanded fixture output, consumed/retry_finished/retry_ok true for ec92443fe893; one consultation |
+| Live successful recovery/native approval UI | PASS on 0.1.6, including explicit user resolution | Real native Run, expanded fixture output, consumed/retry_finished/retry_ok true; user clicked verification and refreshed state is RESOLVED/user_verified true for ec92443fe893; one consultation |
 | Live native denial and blocked second corrective attempt | PENDING | Separate 0.1.6 incident 115eedc6df7a has a valid proposal; not yet armed |
 | Latest-version live Telegram round trip | PASS on 0.1.5 | Exact GUARDIAN_BRIDGE_015_OK reply in a new test topic; bridge settings untouched |
 | Real host HTTP timeout/retry acceptance | PASS, controlled delayed loopback transport | transport-timeout-0.1.6.json: 3 HTTP attempts, 23.35 seconds, one logical consultation, typed timeout, blocks retained |
@@ -36,3 +36,6 @@ Desktop continuation encountered GetCursorPos access denied. The user was asked 
 
 
 On 2 November the actual native-approved corrective read succeeded. The expanded tool card returned HERMES_GUARDIAN_RECOVERY_OK; refreshed Guardian state recorded consumed=true, retry_finished=true and retry_ok=true, retaining ESCALATE_TO_USER until explicit user verification. Real denial and resolution are still acceptance gates; no blanket readiness claim is made.
+
+
+The user physically verified the successful result and clicked resolve. Refreshed frontend history confirms ec92443fe893 is RESOLVED with user_verified=true, consumed=true, retry_ok=true and escalations=1. The separate denial case remains pending.
