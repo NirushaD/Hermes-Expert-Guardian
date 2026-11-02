@@ -2,7 +2,7 @@
 
 Candidate: Guardian 0.1.6, runtime source commit 421ac95598b7579b0e109d07dd9311afd5c31318. Desktop inventory lists 0.1.6 at the exact approved pin; a complete restart loaded the new backend, verified by 42 frontend passes on 2 November. Installed runtime: Hermes d923a5eb487a17c0a68801bba9ef0f56c81040a8, Desktop 0.22.2, Windows.
 
-Status: acceptance incomplete; do not interpret automated passes as a blanket production certification.
+Status: accepted for the documented supported scope on this installed Hermes configuration. Automated, installation, live recovery/resolution and live denial/second-attempt gates passed. This is not a blanket certification across every provider, host version or arbitrary command.
 
 | Gate | Result | Evidence |
 |---|---|---|
@@ -17,10 +17,10 @@ Status: acceptance incomplete; do not interpret automated passes as a blanket pr
 | Concurrent send and retry reservations | PASS | ReleaseGates; one logical consultation/one native approval |
 | Expert remains text-only and host-routed | PASS | runtime probe and neutral-registration tests |
 | Configurable Expert picker | PASS | Actual Hermes provider/model controls inspected |
-| Latest-version live post-consultation veto | PASS on 0.1.5 | Expanded real tool error shows Guardian incident f141f3b843f5 and ESCALATE_TO_USER |
+| Live post-consultation veto | PASS on 0.1.6 | Expanded real second-attempt tool error shows Guardian incident 115eedc6df7a and ESCALATE_TO_USER |
 | Live successful recovery/native approval UI | PASS on 0.1.6, including explicit user resolution | Real native Run, expanded fixture output, consumed/retry_finished/retry_ok true; user clicked verification and refreshed state is RESOLVED/user_verified true for ec92443fe893; one consultation |
-| Live native denial and blocked second corrective attempt | PENDING | Separate 0.1.6 incident 115eedc6df7a has a valid proposal; not yet armed |
-| Latest-version live Telegram round trip | PASS on 0.1.5 | Exact GUARDIAN_BRIDGE_015_OK reply in a new test topic; bridge settings untouched |
+| Live native denial and blocked second corrective attempt | PASS on 0.1.6 | Actual native Reject returned Action denied by user; separate second request returned Guardian veto; consumed/retry_finished true, retry_ok false, one consultation |
+| Existing Telegram bridge live round trip | PASS on 0.1.5; not repeated on 0.1.6 | Exact GUARDIAN_BRIDGE_015_OK reply in a new test topic; bridge settings untouched |
 | Real host HTTP timeout/retry acceptance | PASS, controlled delayed loopback transport | transport-timeout-0.1.6.json: 3 HTTP attempts, 23.35 seconds, one logical consultation, typed timeout, blocks retained |
 
 The user explicitly authorized local automated checks in addition to frontend testing on this date, superseding the earlier frontend-only constraint. All local release gates use synthetic data and temporary databases/profiles. No default-profile settings are altered by those scripts. The worker-death test terminates only its own disposable Python worker, not Hermes or another application.
@@ -39,3 +39,10 @@ On 2 November the actual native-approved corrective read succeeded. The expanded
 
 
 The user physically verified the successful result and clicked resolve. Refreshed frontend history confirms ec92443fe893 is RESOLVED with user_verified=true, consumed=true, retry_ok=true and escalations=1. The separate denial case remains pending.
+
+
+## Final live acceptance, 2 November
+
+For incident 115eedc6df7a, refreshed state confirmed the manually authorized exact read at SINGLE_RETRY. The real native prompt appeared and the user physically clicked Reject. Expanded actual tool output reported BLOCKED: Action denied by user; no file content was returned. A separately requested second-attempt acceptance check used the same exact operation and was refused before execution, with no new native prompt. Expanded actual tool output contained Guardian incident 115eedc6df7a: identical_failure; ESCALATE_TO_USER. Final refreshed state: consumed=true, retry_finished=true, retry_ok=false, escalations=1. The earlier success remained RESOLVED/user_verified=true/retry_ok=true. Enforce mode remained saved. No incident history was deleted or denial promoted to success.
+
+These results close the outstanding real recovery/resolution and native denial/second-attempt gates. No runtime change was needed for this continuation. Existing bridge round-trip evidence remains explicitly versioned at 0.1.5; 0.1.6 did not change bridge code or settings, but this is not a claim of a fresh 0.1.6 Telegram run. No Proxmox or server action was performed for these tests.

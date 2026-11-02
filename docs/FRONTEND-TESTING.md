@@ -169,3 +169,10 @@ After the user physically clicked Run in Hermes, expanded the actual read_file t
 
 
 The user subsequently clicked I verified success criteria; resolve. Refreshed persisted history confirmed ec92443fe893 at RESOLVED with user_verified true, consumed true, retry_ok true and escalations 1. The full real success path, including native Run, output verification and manual incident resolution, passed. Prepared the independent incident 115eedc6df7a for native rejection; it is not yet counted as passed.
+
+
+## 2 November: real native denial and consumed-attempt refusal PASS
+
+Refreshed history confirmed incident 115eedc6df7a at SINGLE_RETRY after the user manually authorized the exact path-only fixture read. Submitted one operation through the local primary-model chat. The native Guardian approval appeared; the user physically clicked Reject. Expanded actual tool card reported BLOCKED: Action denied by user. No fixture contents were returned.
+
+Submitted one separately authorized guard-refusal check with the identical operation, forbidding execution/bypass and any alternatives. No second native prompt appeared. Expanded actual tool card showed Guardian incident 115eedc6df7a: identical_failure; ESCALATE_TO_USER. Final refreshed frontend history confirmed consumed true, retry_finished true, retry_ok false, escalations 1. The successful incident ec92443fe893 remained RESOLVED with user_verified true and retry_ok true. Mode remained enforce. The denied incident was retained unresolved; no reset, second consultation, force override, write or server action was used.
