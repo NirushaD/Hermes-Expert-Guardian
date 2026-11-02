@@ -1,4 +1,4 @@
-# Production acceptance status — 1 November 2026
+# Production acceptance status — 2 November 2026
 
 Candidate: Guardian 0.1.6, runtime source commit 421ac95598b7579b0e109d07dd9311afd5c31318. Desktop inventory lists 0.1.6 at the exact approved pin; a complete restart loaded the new backend, verified by 42 frontend passes on 2 November. Installed runtime: Hermes d923a5eb487a17c0a68801bba9ef0f56c81040a8, Desktop 0.22.2, Windows.
 
@@ -18,7 +18,8 @@ Status: acceptance incomplete; do not interpret automated passes as a blanket pr
 | Expert remains text-only and host-routed | PASS | runtime probe and neutral-registration tests |
 | Configurable Expert picker | PASS | Actual Hermes provider/model controls inspected |
 | Latest-version live post-consultation veto | PASS on 0.1.5 | Expanded real tool error shows Guardian incident f141f3b843f5 and ESCALATE_TO_USER |
-| Live successful recovery/native approval UI | PENDING | New 0.1.5 real advice had confidence 0.98 and unresolved true; retry correctly stayed blocked |
+| Live successful recovery/native approval UI | Execution PASS on 0.1.6; explicit user resolution pending | Real native Run, expanded fixture output, consumed/retry_finished/retry_ok true for ec92443fe893; one consultation |
+| Live native denial and blocked second corrective attempt | PENDING | Separate 0.1.6 incident 115eedc6df7a has a valid proposal; not yet armed |
 | Latest-version live Telegram round trip | PASS on 0.1.5 | Exact GUARDIAN_BRIDGE_015_OK reply in a new test topic; bridge settings untouched |
 | Real host HTTP timeout/retry acceptance | PASS, controlled delayed loopback transport | transport-timeout-0.1.6.json: 3 HTTP attempts, 23.35 seconds, one logical consultation, typed timeout, blocks retained |
 
@@ -32,3 +33,6 @@ Supported scope is deterministic, bounded loop prevention and manually approved 
 Version 0.1.6 clarifies diagnostic uncertainty versus pending approved execution and additionally blocks proposals with outstanding evidence prerequisites. No Expert response resolves an incident; successful execution and explicit verification remain required. This contract correction is not evidence of live recovery until the actual UI workflow passes. The controlled timeout probe does not claim a live outage of every selectable external provider.
 
 Desktop continuation encountered GetCursorPos access denied. The user was asked to unlock and foreground Hermes; no alternative OS automation, security-setting bypass or direct default-profile mutation was attempted.
+
+
+On 2 November the actual native-approved corrective read succeeded. The expanded tool card returned HERMES_GUARDIAN_RECOVERY_OK; refreshed Guardian state recorded consumed=true, retry_finished=true and retry_ok=true, retaining ESCALATE_TO_USER until explicit user verification. Real denial and resolution are still acceptance gates; no blanket readiness claim is made.
