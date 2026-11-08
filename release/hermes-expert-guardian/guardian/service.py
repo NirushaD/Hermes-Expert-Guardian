@@ -33,6 +33,8 @@ class Guardian:
         return next(i for i in data["incidents"] if i["id"] == identity)
 
     def pre(self, tool_name, args, session_id="", task_id="", tool_call_id="", **_):
+        if tool_name == "guardian_review":
+            return None  # Advisory tool has its own session/policy/budget checks.
         if not self.enabled():
             return None
         if not session_id:
@@ -59,7 +61,7 @@ class Guardian:
                         # Every recovery goes through native human approval, regardless of risk classifier.
                         return {"action": "approve", "message": "Guardian: approve this single corrective attempt",
                                 "rule_key": "guardian:" + incident["id"] + ":" + op}
-                    return {"action": "block", "message": f"Guardian incident {incident['id']}: {incident['reason']}; {incident['state']}. Open Expert Guardian settings."}
+                    return {"action": "block", "message": f"Guardian incident {incident['id']}: {incident['reason']}; {incident['state']}. " + self.review_instruction(incident)}
                 if self.enforce() and any(p["op"] == op for p in data["pending"].values()):
                     return {"action": "block", "message": "Guardian: identical operation already in flight"}
                 if tool_call_id:
@@ -71,6 +73,8 @@ class Guardian:
             return {"action": "block", "message": "Guardian state unavailable; user intervention required"} if self.enforce() else None
 
     def post(self, tool_name, args, result=None, status="ok", session_id="", task_id="", tool_call_id="", **_):
+        if tool_name == "guardian_review":
+            return
         if not self.enabled() or not session_id:
             return
         with self.store.session(session_id) as data:
@@ -128,7 +132,7 @@ class Guardian:
 
     def view(self, session):
         with self.store.session(session) as data:
-            return copy.deepcopy({"incidents": data["incidents"], "objective": data["objective"], "mode": self.config("mode", "monitor")})
+            return copy.deepcopy({"incidents": data["incidents"], "reviews": data.get("reviews", []), "objective": data["objective"], "mode": self.config("mode", "monitor")})
 
     def prepare(self, session, identity, description, outcome):
         with self.store.session(session) as data:
@@ -208,15 +212,41 @@ class Guardian:
     def context(self, session_id="", **_):
         if not self.enabled() or not session_id:
             return None
-        items = self.view(session_id)["incidents"]
+        # A deliberate user phrase creates a manual request; the model tool cannot
+        # manufacture this permission through its own arguments.
+        message = _.get("user_message", "")
+        if isinstance(message, str) and message.strip().lower().startswith("guardian review:"):
+            from .review import Reviews
+            try:
+                Reviews(self).request(session_id)
+            except ValueError:
+                return {"context": "Guardian manual review request refused: check settings, cooldown or session review budget. Do not retry automatically."}
+        view = self.view(session_id)
+        items = view["incidents"]
+        requests = [r for r in view["reviews"] if r["state"] in {"REQUESTED", "AWAIT_SEND", "ADVICE_READY"} and not r.get("delivered")]
+        review_context = ""
+        if self.config("model_requested_reviews", False):
+            review_context += " If stuck or needing independent advice, call guardian_review with a focused diagnostic."
+        if requests:
+            review_context += " Guardian reviews: " + json.dumps([
+                {"review_id": r["id"], "state": r["state"]} for r in requests])
+            review_context += " Call guardian_review with review_id to prepare or retrieve advice, then continue the task."
         active = [i for i in items if i["state"] in ACTIVE]
         if active:
             return {"context": "Expert Guardian: " + str([{k: i[k] for k in ("id", "reason", "state")} for i in active]) +
-                    ". Open plugin settings for user-controlled escalation. Advice: " + str([i.get("advice") for i in active])}
+                    ". " + self.review_instruction(active[-1]) + " Advice: " + str([i.get("advice") for i in active]) + review_context}
+        if review_context:
+            return {"context": review_context}
+
+    def review_instruction(self, item):
+        if self.config("expert_enabled", False) and self.config("automatic_loop_reviews", False) and item["state"] == "BLOCK_RETRIES":
+            return ("Call guardian_review with incident_id=" + item["id"] +
+                    " and a focused diagnostic of the task, evidence and failed approaches. Do not repeat the failed operation.")
+        return "Open plugin settings for user-controlled escalation."
 
     def transform(self, tool_name, args, result=None, session_id="", task_id="", **_):
         """Attach generated incident facts to the same tool result the model receives."""
-        if not self.enabled() or not session_id:
+        if tool_name == "guardian_review" or not self.enabled() or not session_id:
             return None
         with self.store.session(session_id) as data:
             scope = self.scope(data, task_id, tool_name, args)
@@ -226,7 +256,7 @@ class Guardian:
             item = active[-1]
             notice = {"incident_id": item["id"], "reason": item["reason"], "state": item["state"],
                       "attempts": item["attempts"], "mode": self.config("mode", "monitor"),
-                      "message": "Guardian detected repetition. Report this incident to the user. Open Expert Guardian settings."}
+                      "message": "Guardian detected repetition. " + self.review_instruction(item)}
             if isinstance(result, dict):
                 return json.dumps({**result, "guardian_notice": notice})
             if isinstance(result, str):

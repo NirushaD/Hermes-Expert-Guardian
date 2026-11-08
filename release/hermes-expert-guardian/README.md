@@ -1,4 +1,30 @@
-# Hermes Expert Guardian 0.1.6
+# Hermes Expert Guardian 0.3.0
+
+## Expert conversation settings
+
+In Settings → Plugins → Expert Guardian → Agent settings, enable `expert_conversations` for multi-round advice. `conversation_max_rounds` limits total Expert replies per review (1–6, default 3). `conversation_approve_each_round` defaults to true, requiring preview approval for each follow-up. Turn it off to inherit the main preview/automatic sending policy. Sanitisation is mandatory on every round and cannot be disabled. Conversation mode defaults to off.
+
+Hermes gathers requested evidence locally and sends a follow-up diagnostic through the review tool. Only sanitised summaries and sanitised previous Expert replies form the external conversation; raw transcripts and file contents are not appended automatically. Preview remains advisable for sensitive work because no anonymiser guarantees detection of every private detail.
+
+## New advisory reviews
+
+Building locally does not publish the Git installation URL below or update an installed plugin. The local ZIP in `dist/` contains the runtime tree; ZIP-import UI support is not claimed. Earlier installation scan evidence applies to earlier releases.
+
+Enable the agent and Desktop halves for the correct profile. Enable `expert_enabled`, select Expert in Hermes auxiliary-model settings, and set `local_summary_model` to the exact locally served model ID. The local endpoint defaults to `http://127.0.0.1:1234/v1/chat/completions`; only literal loopback HTTP endpoints are supported, with no proxy, redirect or cloud fallback. Your local server must actually serve a local model.
+
+Set `review_sending_policy=automatic`, `automatic_loop_reviews=true` and `model_requested_reviews=true` for unattended reviews. Defaults retain preview sending with automatic triggers off. Normal Hermes approvals apply to continued processing.
+
+Type `Guardian review: assess our current problem and continue after advice`, or select the session in settings and click **Request Expert review and continue**. The agent prepares a diagnostic, the local model anonymises it, Expert advises, and the agent assesses the advice before continuing. With preview sending, refresh incidents, inspect the chosen review's packet, enter its Review ID and click **Approve reviewed summary and continue**. If no composer accepts the submitted turn, open that session and ask Hermes to continue its pending review.
+
+Budget defaults: 3 reviews per session and a 60-second cooldown. Failed and cancelled requests count. A crash in preparation/sending is not automatically retried; cancel before deliberately requesting another. Automatic loop notices depend on the primary model following the instruction to call `guardian_review`.
+
+Pattern removal and local anonymisation cannot guarantee removal of every personal fact or unlabeled secret. Preview sensitive packets. Raw diagnostic input is not persisted; validated packets/advice remain in history. Live Desktop, installed dispatch and real model/provider acceptance are not established for this build.
+
+Full workflow and limits: https://github.com/NirushaD/Hermes-Expert-Guardian/blob/main/docs/REVIEWS.md
+
+## Legacy incident recovery workflow (0.1.x)
+
+The instructions below describe the older exact-operation recovery controls, which remain available separately. Their mandatory preview/operation approvals do not apply to the new advisory workflow.
 
 Runtime-only plugin package. Default: monitor-only, expert escalation disabled.
 

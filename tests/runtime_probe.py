@@ -31,6 +31,7 @@ with tempfile.TemporaryDirectory(dir=workspace/'.reference') as scratch:
     manager=context._manager
     assert set(manager._hooks)=={'pre_tool_call','post_tool_call','pre_llm_call','transform_tool_result'}
     assert 'guardian_expert' in manager._aux_tasks
+    assert 'guardian_review' in manager._plugin_tool_names
     g=module.guardian.integration.create(context)
     context.set_config('mode','enforce')
     for _ in range(2):g.post('terminal',{'command':'synthetic-failure'},session_id='test',task_id='goal',status='error',result={'error':'synthetic'})

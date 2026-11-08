@@ -1,4 +1,8 @@
-# Hermes Expert Guardian 0.1.6
+# Hermes Expert Guardian 0.3.0
+
+**New: bounded Expert conversations.** Enable `expert_conversations` in Agent settings for locally anonymised follow-ups within a review. Set `conversation_max_rounds` (1–6, default 3 including the first reply) and `conversation_approve_each_round` (default on). Every outbound round and its retained conversation history pass the privacy boundary. See [conversation settings](docs/REVIEWS.md).
+
+**New: on-demand and automatic advisory reviews.** Type `Guardian review: assess our current problem and continue after advice`, or use **Request Expert review and continue** in settings. Hermes prepares the problem, the configured local model anonymises it, Expert advises, and Hermes continues under normal approvals. Enable automatic sending and loop/model triggers for unattended consultations. See [review setup, behaviour and limits](docs/REVIEWS.md). This build does not install or publish itself.
 
 A conservative, installable **development release**, implemented against the installed Hermes Agent commit `d923a5eb487a17c0a68801bba9ef0f56c81040a8` on Windows 11. This is not a certification that every requirement of the original specification is complete. Read [limitations](docs/COMPATIBILITY.md) before enforcement.
 
@@ -6,7 +10,7 @@ Default: **monitor-only**, expert escalation disabled. Source is published on `m
 
 The Python plugin records bounded operation/result fingerprints per session and objective. After two matching failures, three failed operations in one scope, three configuration rewrites, or five unchanged observations, Enforce mode returns Hermes' supported `{"action":"block","message":"..."}` directive before further dispatch. Native Hermes interprets this as a veto and returns the message as the tool result. Parent context also receives incident state. This is implemented enforcement, not a model instruction. Monitor mode permits execution.
 
-The text-only expert call uses `ctx.llm.complete(task="guardian_expert", ...)`. The plugin registers that auxiliary task as **Expert**, without hard-coded provider or model defaults. Select your preferred configured provider and model in Hermes auxiliary-model settings; otherwise Hermes applies its normal host fallback routing. Existing saved task settings remain effective. It never creates an AIAgent or delegates. The host owns authentication. No tool schemas, files, sessions, or credential values are passed to this call. Consultations start only after a user previews and approves the packet in Desktop.
+The text-only expert call uses `ctx.llm.complete(task="guardian_expert", ...)`. The plugin registers that auxiliary task as **Expert**, without hard-coded provider or model defaults. Select your preferred configured provider and model in Hermes auxiliary-model settings; otherwise Hermes applies its normal host fallback routing. Existing saved task settings remain effective. It never creates an AIAgent or delegates. The host owns authentication. Expert receives a validated diagnostic packet. New reviews support preview or automatic sending; the older incident recovery workflow requires per-packet approval.
 
 ## Development and checks
 
@@ -20,7 +24,7 @@ python package.py
 
 For an installed SDK compatibility probe, use its Python with `tests/runtime_probe.py --runtime <hermes-agent source directory>`. The probe uses a temporary HERMES_HOME, synthetic data and a mocked provider. See [test evidence](docs/TESTING.md).
 
-## Installation for testing
+## Legacy incident recovery: installation and testing
 
 1. Review this source and [security review](docs/SECURITY.md). Keep Manual approvals enabled.
 2. Use the runtime-only source on `main`: **https://github.com/NirushaD/Hermes-Expert-Guardian/tree/main/release/hermes-expert-guardian**. Hermes supports GitHub subdirectory URLs and scans the selected subtree. Security tests remain in this development repository, with their original synthetic hostile strings intact.
@@ -35,7 +39,7 @@ For an installed SDK compatibility probe, use its Python with `tests/runtime_pro
 
 ## Settings and controls
 
-Manifest-generated controls: enabled, monitor/enforce, identical failures, unsuccessful approaches, no-progress threshold, expert enabled, timeout (5–180 seconds). The maximum is fixed at one expert consultation and one corrective attempt per incident. Egress approval is mandatory; automatic sending is intentionally unavailable. Provider/model selection uses the supported auxiliary-model settings rather than duplicate text fields.
+Manifest-generated controls include monitoring thresholds, Expert enablement, timeout and [new review settings](docs/REVIEWS.md). Legacy recovery retains one consultation and one exact corrective attempt per incident. New advisory reviews use a session budget and selectable preview/automatic sending. Expert selection uses Hermes auxiliary-model settings.
 
 The Desktop page provides incident history, packet preview, send approval/denial, recovery authorization, explicit success verification, and reset/history deletion for a session. Session IDs are entered explicitly to avoid selecting the wrong active profile/session. An API objective action exists for integrations, but there is no objective control on the current page. Run local safeguard simulations (no cloud) executes 42 bounded engine checks in the Hermes frontend. These simulations do not replace the complete development suite or live native approval acceptance. The first approved consultation is the live connection check.
 

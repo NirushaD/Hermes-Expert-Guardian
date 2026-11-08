@@ -1,5 +1,9 @@
 # Compatibility assessment — 1 November 2026
 
+**0.3.0 update (9 November 2026):** Bounded, sanitised follow-up conversations add manifest-generated Agent settings and reuse the existing review tool and LLM facade. Synthetic conversation and package regression checks pass. Live installed-runtime, Desktop and real model/provider acceptance remain outstanding.
+
+**0.2.0 update (9 November 2026):** [Advisory reviews](REVIEWS.md) add documented tool registration, loopback-only local summarisation and Desktop composer submission. Implementation uses the checked-in SDK/source references and synthetic tests. Live installed dispatch and Desktop acceptance have not been established for this change. The older assessment below describes 0.1.x incident recovery; statements that automatic sending is absent apply to that older workflow.
+
 Inspected installed source commit `d923a5eb487a17c0a68801bba9ef0f56c81040a8`. Its pyproject version is the placeholder `0.0.0`, so the commit is the meaningful runtime identity. The Desktop application executable version was not established; frontend runtime smoke testing remains required.
 
 | Surface | Evidence and status |

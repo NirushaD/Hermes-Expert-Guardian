@@ -1,5 +1,5 @@
 name: hermes-expert-guardian
-version: "0.1.6"
+version: "0.3.0"
 description: "Deterministic loop monitoring, session-scoped retry vetoes and approved text-only expert advice."
 author: "Hermes Expert Guardian contributors"
 manifest_version: 2
@@ -10,5 +10,16 @@ config_schema:
   identical_failures: {type: int, default: 2}
   unsuccessful_approaches: {type: int, default: 3}
   no_progress: {type: int, default: 5}
-  expert_enabled: {type: bool, default: false, description: "Allow manually approved text-only Expert consultations"}
+  expert_enabled: {type: bool, default: false, description: "Allow text-only Expert consultations under the selected sending policy"}
   expert_timeout: {type: int, default: 60, description: "Host provider timeout in seconds (5–180)"}
+  manual_reviews: {type: bool, default: true, description: "Allow session-scoped manual review requests"}
+  automatic_loop_reviews: {type: bool, default: false, description: "Ask the local agent to consult Expert on detected loops"}
+  model_requested_reviews: {type: bool, default: false, description: "Allow the agent to request advice before a loop occurs"}
+  review_sending_policy: {type: str, default: preview, choices: [preview, automatic], description: "Preview each anonymous packet or automatically send validated summaries"}
+  local_summary_url: {type: str, default: "http://127.0.0.1:1234/v1/chat/completions", description: "Local-only OpenAI-compatible endpoint; literal loopback IP required"}
+  local_summary_model: {type: str, default: "", description: "Explicit local model ID for private diagnostic preparation; no cloud fallback"}
+  max_reviews: {type: int, default: 3, description: "Maximum review requests per session (2–50); reset history to replenish"}
+  review_cooldown: {type: int, default: 60, description: "Minimum seconds between reviews (0–3600)"}
+  expert_conversations: {type: bool, default: false, description: "Allow Hermes and Expert to exchange sanitised follow-up questions and advice within a review"}
+  conversation_max_rounds: {type: int, default: 3, description: "Maximum Expert replies per conversation, including the initial reply (1–6)"}
+  conversation_approve_each_round: {type: bool, default: true, description: "Require preview approval for every follow-up; when off, inherit the review sending policy. Local sanitisation is always required"}
