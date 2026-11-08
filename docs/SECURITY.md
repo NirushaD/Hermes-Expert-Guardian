@@ -1,5 +1,19 @@
 # Security review
 
+## 0.3.0 conversation extension
+
+Follow-ups require explicit conversation enablement and a matching prior round number, are capped at six Expert replies including the first, and pass local anonymisation on every new diagnostic. Only validated summaries and sanitised copies of prior Expert replies are retained as outbound conversation history. The entire history is revalidated before sending. Preview approval defaults on for each follow-up and binds to the complete packet. There is no privacy bypass setting. Duplicate/stale rounds cannot create additional logical consultations. These controls reduce disclosure risk; arbitrary personal facts and unlabeled secrets remain beyond any guarantee of detection.
+
+## 0.2.0 advisory review boundary
+
+The [new workflow](REVIEWS.md) uses a separate policy from legacy recovery below. Bounded diagnostics go only to an explicitly configured literal loopback HTTP endpoint, with proxies/redirects disabled and no cloud fallback. Identifier patterns are removed before local summarisation and again afterward; only validated structured summary fields reach Expert. Raw diagnostics, local raw responses and exception text are not persisted by Guardian. The local server's logging and internal routing remain outside this boundary.
+
+Automatic sending is configurable and off by default (`preview`). Patterns and model anonymisation cannot guarantee removal of every name, personal fact or unlabeled secret. Automatic sending carries residual disclosure risk; preview permits inspection and hash-bound approval. Expert has no tools. Advice returns to the local agent as untrusted data under normal Hermes approvals. A valid loop review releases only its linked incident to REVIEWED so the agent can gather evidence or try a revised approach. It does not establish successful resolution. The older exact-operation controls remain available separately.
+
+Session identity comes from host context, not model arguments. SQLite transactions bound concurrency and budgets. Restart does not resend in-flight consultations; cancellation cannot retract an already sent packet. New tests are synthetic; historical scanner and native-runtime results do not certify this changed release.
+
+## Historical 0.1.x assessment
+
 Review scope: local source review, synthetic tests, installed SDK manifest/registration/native-directive/facade probes. No external security audit or production penetration test.
 
 ## Outbound boundary

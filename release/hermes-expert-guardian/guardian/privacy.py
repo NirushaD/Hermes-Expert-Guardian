@@ -51,6 +51,34 @@ def packet(incident, description, outcome):
 
 
 def validate_packet(data):
+    if isinstance(data, dict) and set(data) == {"review_version", "summary", "history"}:
+        from .review import anonymous_advice
+        if type(data["review_version"]) is not int or data["review_version"] != 2:
+            raise ValueError("Invalid conversation packet")
+        history = data["history"]
+        if not isinstance(history, list) or not 1 <= len(history) <= 5 or len(json.dumps(data)) > 90000:
+            raise ValueError("Conversation history exceeds boundary")
+        validate_packet({"review_version": 1, "summary": data["summary"]})
+        for turn in history:
+            if not isinstance(turn, dict) or set(turn) != {"summary", "advice"}:
+                raise ValueError("Invalid conversation turn")
+            validate_packet({"review_version": 1, "summary": turn["summary"]})
+            if anonymous_advice(turn["advice"]) != turn["advice"]:
+                raise ValueError("Unredacted conversation reply")
+        return
+    if isinstance(data, dict) and set(data) == {"review_version", "summary"}:
+        from .review import SUMMARY_FIELDS
+        summary = data["summary"]
+        if type(data["review_version"]) is not int or data["review_version"] != 1 or not isinstance(summary, dict) or set(summary) != SUMMARY_FIELDS:
+            raise ValueError("Invalid review packet")
+        from .review import sanitise
+        for value in summary.values():
+            safe_text(value, 800)
+            if sanitise(value) != value:
+                raise ValueError("Unredacted identifier")
+        if not summary["problem"].strip() or not summary["question"].strip():
+            raise ValueError("Missing diagnostic")
+        return
     expected = {"problem", "intended_outcome", "failure_type", "failed_attempts", "verified_facts", "uncertain", "question"}
     if set(data) != expected or len(json.dumps(data)) > 5000:
         raise ValueError("Invalid outbound packet")

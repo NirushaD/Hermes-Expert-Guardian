@@ -33,6 +33,20 @@ def action(body: dict):
             raise ValueError("Session required")
         kind = body["action"]
         identity = body.get("incident", "")
+        if kind == "request_review":
+            from importlib import import_module
+            return import_module(name + ".review").Reviews(service).request(session)
+        if kind == "send_review":
+            from importlib import import_module
+            return import_module(name + ".review").Reviews(service).send(session, body["review_id"], body["packet_hash"])
+        if kind == "cancel_review":
+            with service.store.session(session) as data:
+                item = next(r for r in data.get("reviews", []) if r["id"] == body["review_id"])
+                item["state"] = "CANCELLED"
+                item.pop("packet", None)
+                item.pop("advice", None)
+                item.pop("history", None)
+            return {"ok": True}
         if kind == "prepare":
             return service.prepare(session, identity, body["description"], body["outcome"])
         if kind == "send":

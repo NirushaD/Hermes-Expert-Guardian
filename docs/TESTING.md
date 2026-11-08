@@ -1,5 +1,17 @@
 # Test evidence — 1 November 2026
 
+## 0.3.0 conversation checks — 9 November 2026
+
+Full suite: **67 tests, OK, 2 skips** under system Python. Runtime packaging and byte-identity tests pass; JavaScript syntax and Python compilation checks pass. Conversation tests cover default-off policy, sanitised history roles, local preparation for each round, preview/hash binding to history, round limits, stale/concurrent duplicate requests, preparation failure, disabling pending follow-ups, history identifier rejection and placeholder collisions. Calls use fake local summaries and mocked Expert responses. These do not establish real anonymisation quality, provider connectivity or live Desktop acceptance. The runtime package is rebuilt as 0.3.0; earlier results below remain historical.
+
+## 0.2.0 build validation — 9 November 2026
+
+System Python regression run reports **60 tests, OK, 2 skips**. FastAPI backend tests are unavailable in this interpreter; the optional HTTP transport exception test is also skipped. The new review tests mock provider calls and exercise the registered handler with host identity, manual/chat requests, loop notices, local endpoint restrictions, sanitisation, preview approval, concurrency, budgets, cancellation and failure handling. JavaScript module syntax and Python compilation checks pass. The runtime-only package is rebuilt and byte-identity regression checks pass. No cloud requests or installed configuration changes were made.
+
+The existing installed-runtime probe now also checks `guardian_review` registration, but it has not been rerun against an installed Hermes interpreter for this build. Real Desktop composer delivery, local model anonymisation and Expert connectivity remain live acceptance work. Historical results below describe prior builds.
+
+## Historical results
+
 Final installed-Hermes interpreter run: **29 tests passed**, 2.291 seconds. Standard system Python run: 26 passed, backend test class skipped because FastAPI is not installed there. FastAPI tests all passed under Hermes Python.
 
 Commands:

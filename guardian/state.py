@@ -23,7 +23,8 @@ class Store:
             db.execute("INSERT OR REPLACE INTO sessions VALUES (?,?,?)", (identity, time.time(), json.dumps(data)))
             for old_id, encoded in db.execute("SELECT id,data FROM sessions WHERE touched < ?", (time.time()-30*86400,)).fetchall():
                 old = json.loads(encoded)
-                if not old["pending"] and all(i["state"] == "RESOLVED" for i in old["incidents"]):
+                if (not old["pending"] and all(i["state"] in {"RESOLVED", "REVIEWED"} for i in old["incidents"])
+                        and all(r["state"] in {"FAILED", "ADVICE_READY", "CANCELLED"} for r in old.get("reviews", []))):
                     db.execute("DELETE FROM sessions WHERE id=?", (old_id,))
 
     def delete(self, identity):
