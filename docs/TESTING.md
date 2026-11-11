@@ -1,5 +1,9 @@
 # Test evidence — 1 November 2026
 
+## 0.3.1 approval page regression — 12 November 2026
+
+The Node frontend interaction harness exercises the actual settings component with a mocked React/SDK surface. It verifies pending-review selection, visible packet previews, unrelated actions preserving the preview, session-bound approval, whitespace handling, stale-packet refusal, old-backend diagnostics, and preventing repeated approval. It does not contact Expert. This complements backend hash/state validation rather than replacing it.
+
 ## 0.3.0 conversation checks — 9 November 2026
 
 Full suite: **67 tests, OK, 2 skips** under system Python. Runtime packaging and byte-identity tests pass; JavaScript syntax and Python compilation checks pass. Conversation tests cover default-off policy, sanitised history roles, local preparation for each round, preview/hash binding to history, round limits, stale/concurrent duplicate requests, preparation failure, disabling pending follow-ups, history identifier rejection and placeholder collisions. Calls use fake local summaries and mocked Expert responses. These do not establish real anonymisation quality, provider connectivity or live Desktop acceptance. The runtime package is rebuilt as 0.3.0; earlier results below remain historical.

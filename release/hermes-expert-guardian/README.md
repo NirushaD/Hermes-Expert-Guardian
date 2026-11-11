@@ -1,4 +1,6 @@
-# Hermes Expert Guardian 0.3.0
+# Hermes Expert Guardian 0.3.1
+
+For a pending review, click **Load / refresh reviews for this session**, select it from the review list and inspect the displayed anonymous packet. A single pending review is selected automatically. **Approve reviewed summary and continue** is enabled only for a loaded AWAIT_SEND packet in the selected session. If the backend exposes no reviews, restart Hermes to load its updated backend. No approval sends automatically on loading or selection.
 
 ## Expert conversation settings
 

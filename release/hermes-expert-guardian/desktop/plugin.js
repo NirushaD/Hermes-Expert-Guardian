@@ -11,11 +11,36 @@ function Settings({ ctx }) {
   const [outcome, setOutcome] = useState('')
   const [operation, setOperation] = useState('{"tool":"terminal","args":{"command":""}}')
   const [result, setResult] = useState(null)
+  const [reviewSnapshot, setReviewSnapshot] = useState(null)
   const [busy, setBusy] = useState(false)
+  const selectedReview = reviewSnapshot?.session===session.trim()
+    ? reviewSnapshot.reviews.find(r=>r.id===review.trim()) : null
+  const canApprove = selectedReview?.state==='AWAIT_SEND' && !!selectedReview.packet_hash && !!selectedReview.packet
+  const refresh = async () => {
+    const target=session.trim()
+    if(!target){host.notify({kind:'info',message:'Select the task’s durable session ID first.'});return}
+    setBusy(true)
+    try {
+      const data=await ctx.rest('/incident?session='+encodeURIComponent(target))
+      setResult(data)
+      const reviews=Array.isArray(data.reviews)?data.reviews:[]
+      setReviewSnapshot({session:target,reviews})
+      if(!reviews.some(r=>r.id===review.trim())) {
+        const pending=reviews.filter(r=>r.state==='AWAIT_SEND')
+        setReview(pending.length===1?pending[0].id:'')
+      }
+      if(!Array.isArray(data.reviews))host.notify({kind:'info',message:'This backend does not expose advisory reviews. Restart Hermes to load the updated plugin backend.'})
+      else if(!reviews.length)host.notify({kind:'info',message:'No reviews in this session. Use the session where you requested the review.'})
+    }catch{setReviewSnapshot(null);host.notify({kind:'error',message:'Cannot load reviews. Check the session ID and connection.'})}
+    finally{setBusy(false)}
+  }
   const field = (label, value, change) => jsxs('label', { style:{display:'block',margin:'12px 0'}, children:[label, jsx('input', {value, onChange:e=>change(e.target.value), style:{display:'block',width:'100%',padding:'8px',marginTop:'4px',border:'1px solid #68707c',borderRadius:'4px',background:'transparent',color:'inherit'}})] })
   const act = async (action, extra={}) => {
     setBusy(true)
-    try { setResult(await ctx.rest('/action', {method:'POST', body:{session, incident, action, ...extra}})) }
+    try {
+      setResult(await ctx.rest('/action', {method:'POST', body:{session, incident, action, ...extra}}))
+      if(action==='cancel_review' || action==='reset')setReviewSnapshot(null)
+    }
     catch { host.notify({kind:'error',message:'Guardian action refused; check incident state and privacy constraints.'}) }
     finally { setBusy(false) }
   }
@@ -38,21 +63,33 @@ function Settings({ ctx }) {
       finally{setBusy(false)}
     }),
     field('Review ID (from request or review history)',review,setReview),
-    button('Approve reviewed summary and continue',async()=>{
-      const item=result?.reviews?.find(r=>r.id===review)
-      if(!item?.packet_hash || item.state!=='AWAIT_SEND'){host.notify({kind:'info',message:'Refresh incidents and review the exact anonymous packet before approving.'});return}
-      const target=session
+    button('Load / refresh reviews for this session',refresh),
+    reviewSnapshot?.session===session.trim() && jsxs('label',{style:{display:'block',margin:'12px 0'},children:[
+      'Select a review',jsx('select',{value:review.trim(),onChange:e=>setReview(e.target.value),style:{display:'block',width:'100%',padding:'8px'},children:[
+        jsx('option',{value:'',children:'Choose a review'}),
+        ...reviewSnapshot.reviews.map(r=>jsx('option',{value:r.id,children:r.id+' — '+r.state+(r.round?' — round '+r.round:'')},r.id))
+      ]})
+    ]}),
+    jsx('p',{children:selectedReview
+      ? 'Selected review: '+selectedReview.id+' — '+selectedReview.state+'. Inspect the anonymous packet below before approving.'
+      : 'Load reviews for the task’s session, then select a review. Pending reviews are separate from legacy incidents.'}),
+    selectedReview?.packet && jsx('pre',{'aria-label':'Anonymous packet for approval',style:{whiteSpace:'pre-wrap',overflowWrap:'anywhere',padding:'12px',border:'1px solid'},children:JSON.stringify(selectedReview.packet,null,2)}),
+    jsx('button',{type:'button',disabled:busy || !canApprove,style:{margin:'8px',padding:'8px',border:'1px solid'},children:'Approve reviewed summary and continue',onClick:async()=>{
+      if(!canApprove)return
+      const item=selectedReview
+      const target=session.trim()
       setBusy(true)
       try{
-        const advice=await ctx.rest('/action',{method:'POST',body:{session:target,action:'send_review',review_id:review,packet_hash:item.packet_hash}})
+        const advice=await ctx.rest('/action',{method:'POST',body:{session:target,action:'send_review',review_id:item.id,packet_hash:item.packet_hash}})
+        setReviewSnapshot(null)
         setResult(advice)
-        if(advice.state==='ADVICE_READY' && !host.composer.submit(target,'Retrieve guardian_review review_id '+review+' and assess the advice against local evidence, then continue our task using normal approvals.'))host.notify({kind:'info',message:'Advice ready. Open this session and ask Hermes to retrieve the pending review.'})
-      }catch{host.notify({kind:'error',message:'Review sending refused.'})}
+        if(advice.state==='ADVICE_READY' && !host.composer.submit(target,'Retrieve guardian_review review_id '+item.id+' and assess the advice against local evidence, then continue our task using normal approvals.'))host.notify({kind:'info',message:'Advice ready. Open this session and ask Hermes to retrieve the pending review.'})
+      }catch{setReviewSnapshot(null);host.notify({kind:'error',message:'Approval refused. Reload reviews and inspect the current packet; it may have changed or already been sent.'})}
       finally{setBusy(false)}
-    }),
+    }}),
     button('Cancel selected review',()=>act('cancel_review',{review_id:review})),
     button('Run local safeguard simulations (no cloud)',()=>act('test')),
-    button('Refresh incidents', async()=>{try{setResult(await ctx.rest('/incident?session='+encodeURIComponent(session)))}catch{host.notify({kind:'error',message:'Cannot load incidents'})}}),
+    button('Refresh incidents',refresh),
     field('Public problem description (no secrets)',description,setDescription),field('Intended outcome / success criteria',outcome,setOutcome),
     button('Prepare diagnostic preview',()=>act('prepare',{description,outcome})),
     jsx('p',{children:'Choose your preferred provider and model in Hermes → Model → Auxiliary models → Expert. Hermes manages authentication and routing. Review that destination before approving a packet.'}),

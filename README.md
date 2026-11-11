@@ -1,4 +1,6 @@
-# Hermes Expert Guardian 0.3.0
+# Hermes Expert Guardian 0.3.1
+
+**Approval page fix:** load reviews for the selected session, choose a review from the list, inspect its displayed packet and approve. A sole pending review is selected automatically. Review previews are retained independently of other action results, and approvals are bound to the loaded session and packet.
 
 **New: bounded Expert conversations.** Enable `expert_conversations` in Agent settings for locally anonymised follow-ups within a review. Set `conversation_max_rounds` (1–6, default 3 including the first reply) and `conversation_approve_each_round` (default on). Every outbound round and its retained conversation history pass the privacy boundary. See [conversation settings](docs/REVIEWS.md).
 
