@@ -12,10 +12,14 @@ function Settings({ ctx }) {
   const [operation, setOperation] = useState('{"tool":"terminal","args":{"command":""}}')
   const [result, setResult] = useState(null)
   const [reviewSnapshot, setReviewSnapshot] = useState(null)
+  const [incidentSnapshot, setIncidentSnapshot] = useState(null)
   const [busy, setBusy] = useState(false)
   const selectedReview = reviewSnapshot?.session===session.trim()
     ? reviewSnapshot.reviews.find(r=>r.id===review.trim()) : null
   const canApprove = selectedReview?.state==='AWAIT_SEND' && !!selectedReview.packet_hash && !!selectedReview.packet
+  const selectedIncident = incidentSnapshot?.session===session.trim()
+    ? incidentSnapshot.incidents.find(i=>i.id===incident.trim()) : null
+  const canApproveIncident = selectedIncident?.state==='AWAIT_EGRESS_APPROVAL' && !!selectedIncident.packet_hash && !!selectedIncident.packet
   const refresh = async () => {
     const target=session.trim()
     if(!target){host.notify({kind:'info',message:'Select the task’s durable session ID first.'});return}
@@ -24,22 +28,30 @@ function Settings({ ctx }) {
       const data=await ctx.rest('/incident?session='+encodeURIComponent(target))
       setResult(data)
       const reviews=Array.isArray(data.reviews)?data.reviews:[]
+      const incidents=Array.isArray(data.incidents)?data.incidents:[]
       setReviewSnapshot({session:target,reviews})
+      setIncidentSnapshot({session:target,incidents})
+      if(!incidents.some(i=>i.id===incident.trim())) {
+        const active=incidents.filter(i=>!['RESOLVED','REVIEWED'].includes(i.state))
+        setIncident(active.length===1?active[0].id:incidents.length===1?incidents[0].id:'')
+      }
       if(!reviews.some(r=>r.id===review.trim())) {
         const pending=reviews.filter(r=>r.state==='AWAIT_SEND')
         setReview(pending.length===1?pending[0].id:'')
       }
       if(!Array.isArray(data.reviews))host.notify({kind:'info',message:'This backend does not expose advisory reviews. Restart Hermes to load the updated plugin backend.'})
-      else if(!reviews.length)host.notify({kind:'info',message:'No reviews in this session. Use the session where you requested the review.'})
-    }catch{setReviewSnapshot(null);host.notify({kind:'error',message:'Cannot load reviews. Check the session ID and connection.'})}
+      else if(!reviews.length && !incidents.length)host.notify({kind:'info',message:'No incidents or reviews in this session. Use the session containing your task.'})
+    }catch{setReviewSnapshot(null);setIncidentSnapshot(null);host.notify({kind:'error',message:'Cannot load reviews. Check the session ID and connection.'})}
     finally{setBusy(false)}
   }
   const field = (label, value, change) => jsxs('label', { style:{display:'block',margin:'12px 0'}, children:[label, jsx('input', {value, onChange:e=>change(e.target.value), style:{display:'block',width:'100%',padding:'8px',marginTop:'4px',border:'1px solid #68707c',borderRadius:'4px',background:'transparent',color:'inherit'}})] })
   const act = async (action, extra={}) => {
     setBusy(true)
     try {
-      setResult(await ctx.rest('/action', {method:'POST', body:{session, incident, action, ...extra}}))
+      setResult(await ctx.rest('/action', {method:'POST', body:{session:session.trim(), incident:incident.trim(), action, ...extra}}))
       if(action==='cancel_review' || action==='reset')setReviewSnapshot(null)
+      if(action==='reset')setIncidentSnapshot(null)
+      else if(['prepare','send','deny','authorize','resolve'].includes(action))await refresh()
     }
     catch { host.notify({kind:'error',message:'Guardian action refused; check incident state and privacy constraints.'}) }
     finally { setBusy(false) }
@@ -90,14 +102,22 @@ function Settings({ ctx }) {
     button('Cancel selected review',()=>act('cancel_review',{review_id:review})),
     button('Run local safeguard simulations (no cloud)',()=>act('test')),
     button('Refresh incidents',refresh),
+    incidentSnapshot?.session===session.trim() && jsxs('label',{style:{display:'block',margin:'12px 0'},children:[
+      'Select an incident',jsx('select',{value:incident.trim(),onChange:e=>setIncident(e.target.value),style:{display:'block',width:'100%',padding:'8px'},children:[
+        jsx('option',{value:'',children:'Choose an incident'}),
+        ...incidentSnapshot.incidents.map(i=>jsx('option',{value:i.id,children:i.id+' — '+i.reason+' — '+i.state},i.id))
+      ]})
+    ]}),
+    jsx('p',{children:selectedIncident
+      ? 'Selected incident: '+selectedIncident.id+' — '+selectedIncident.reason+' — '+selectedIncident.state
+      : 'Refresh incidents for this session, then choose an incident from the list.'}),
+    selectedIncident?.packet && jsx('pre',{'aria-label':'Incident packet for approval',style:{whiteSpace:'pre-wrap',overflowWrap:'anywhere',padding:'12px',border:'1px solid'},children:JSON.stringify(selectedIncident.packet,null,2)}),
     field('Public problem description (no secrets)',description,setDescription),field('Intended outcome / success criteria',outcome,setOutcome),
     button('Prepare diagnostic preview',()=>act('prepare',{description,outcome})),
     jsx('p',{children:'Choose your preferred provider and model in Hermes → Model → Auxiliary models → Expert. Hermes manages authentication and routing. Review that destination before approving a packet.'}),
-    button('Approve sending preview to Expert',()=>{
-      const item=result?.incidents?.find(i=>i.id===incident)
-      if(!item?.packet_hash || item.state!=='AWAIT_EGRESS_APPROVAL') {host.notify({kind:'info',message:'Refresh incidents and review the exact packet before approving.'});return}
-      act('send',{packet_hash:item.packet_hash})
-    }),
+    jsx('button',{type:'button',disabled:busy || !canApproveIncident,style:{margin:'8px',padding:'8px',border:'1px solid'},children:'Approve sending preview to Expert',onClick:()=>{
+      if(canApproveIncident)act('send',{packet_hash:selectedIncident.packet_hash})
+    }}),
     button('Deny escalation / stop',()=>act('deny')),
     field('Exact corrective operation JSON',operation,setOperation),
     button('I reviewed evidence; authorize one attempt',()=>{

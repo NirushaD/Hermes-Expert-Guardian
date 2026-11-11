@@ -5,12 +5,12 @@ import vm from 'node:vm'
 const source=fs.readFileSync(new URL('../desktop/plugin.js',import.meta.url),'utf8')
   .replace(/^import .*\r?\n/gm,'').replace('export default {','globalThis.plugin = {')
 const pending=(id='review-1',hash='hash-1')=>({id,state:'AWAIT_SEND',packet_hash:hash,packet:{summary:{problem:'Public test failure'}},round:1})
-function harness(reviews=[pending()]) {
+function harness(reviews=[pending()],incidents=[]) {
   const states=[],calls=[],notifications=[],submissions=[]
   let cursor=0,rejectSend=false
   const ctx={rest:async(path,options)=>{
     calls.push({path,body:options?.body})
-    if(path.startsWith('/incident'))return reviews===null?{incidents:[]}:{incidents:[],reviews}
+    if(path.startsWith('/incident'))return reviews===null?{incidents}:{incidents,reviews}
     if(options.body.action==='send_review'){
       if(rejectSend)throw Error('stale')
       return {state:'ADVICE_READY'}
@@ -83,3 +83,33 @@ const refresh='Load / refresh reviews for this session'
   assert.equal(h.button(approve).props.disabled,true,'Only AWAIT_SEND may be approved')
 }
 console.log('Frontend review selection, preview, session binding and approval checks passed')
+{
+  const incidents=[
+    {id:'incident-one',reason:'identical_failure',state:'AWAIT_EGRESS_APPROVAL',packet_hash:'incident-hash',packet:{problem:'First incident'}},
+    {id:'incident-two',reason:'no_progress',state:'BLOCK_RETRIES'}
+  ]
+  const h=harness([],incidents)
+  await h.click('Refresh incidents')
+  assert.equal(h.button('Approve sending preview to Expert').props.disabled,true)
+  h.change('Select an incident','incident-one')
+  assert.equal(h.button('Approve sending preview to Expert').props.disabled,false)
+  const preview=h.render().find(n=>n.props['aria-label']==='Incident packet for approval')
+  assert.ok(preview.props.children.includes('First incident'))
+  await h.click('Run local safeguard simulations (no cloud)')
+  assert.equal(h.button('Approve sending preview to Expert').props.disabled,false)
+  await h.click('Approve sending preview to Expert')
+  const send=h.calls.find(c=>c.body?.action==='send').body
+  assert.equal(send.incident,'incident-one');assert.equal(send.packet_hash,'incident-hash')
+  h.change('Select an incident','incident-two')
+  assert.equal(h.button('Approve sending preview to Expert').props.disabled,true)
+  h.change('Durable session ID (from the chat URL)','another-session')
+  assert.equal(h.render().some(n=>n.type==='label'&&n.props.children[0]==='Select an incident'),false)
+}
+{
+  const h=harness([],[{id:'only-active',reason:'identical_failure',state:'BLOCK_RETRIES'},
+                      {id:'old',reason:'no_progress',state:'RESOLVED'}])
+  await h.click('Refresh incidents')
+  const selector=h.render().find(n=>n.type==='label'&&n.props.children[0]==='Select an incident')
+  assert.equal(selector.props.children[1].props.value,'only-active')
+}
+console.log('Incident selection, packet binding and session isolation checks passed')

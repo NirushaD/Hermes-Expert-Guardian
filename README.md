@@ -1,4 +1,6 @@
-# Hermes Expert Guardian 0.3.1
+# Hermes Expert Guardian 0.3.2
+
+**Incident picker:** refresh incidents and select one from the dropdown showing its ID, reason and state. A sole active incident is selected automatically; its diagnostic preview is displayed with the selection.
 
 **Approval page fix:** load reviews for the selected session, choose a review from the list, inspect its displayed packet and approve. A sole pending review is selected automatically. Review previews are retained independently of other action results, and approvals are bound to the loaded session and packet.
 

@@ -1,5 +1,9 @@
 # Test evidence — 1 November 2026
 
+## 0.3.2 incident picker — 12 November 2026
+
+The frontend harness covers multiple incident selection, a sole active incident being selected automatically, preview persistence across unrelated actions, exact selected-incident/hash submission, and session isolation. Selecting or refreshing does not send requests to Expert. These checks use mocked frontend responses; live Desktop rendering remains a separate check.
+
 ## 0.3.1 approval page regression — 12 November 2026
 
 The Node frontend interaction harness exercises the actual settings component with a mocked React/SDK surface. It verifies pending-review selection, visible packet previews, unrelated actions preserving the preview, session-bound approval, whitespace handling, stale-packet refusal, old-backend diagnostics, and preventing repeated approval. It does not contact Expert. This complements backend hash/state validation rather than replacing it.

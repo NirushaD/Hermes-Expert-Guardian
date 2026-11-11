@@ -1,4 +1,6 @@
-# Hermes Expert Guardian 0.3.1
+# Hermes Expert Guardian 0.3.2
+
+Click **Refresh incidents** to populate **Select an incident**. Each option shows the incident ID, reason and state. A sole active incident is selected automatically; multiple active incidents require selection. Selection fills the Incident ID and displays its packet when available. Legacy send approval remains tied to that session, incident and packet hash; refreshing or choosing an incident never sends it.
 
 For a pending review, click **Load / refresh reviews for this session**, select it from the review list and inspect the displayed anonymous packet. A single pending review is selected automatically. **Approve reviewed summary and continue** is enabled only for a loaded AWAIT_SEND packet in the selected session. If the backend exposes no reviews, restart Hermes to load its updated backend. No approval sends automatically on loading or selection.
 
