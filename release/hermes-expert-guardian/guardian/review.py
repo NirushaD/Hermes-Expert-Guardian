@@ -259,6 +259,7 @@ class Reviews:
                 incident = self.g.find(data, item["incident"])
                 if incident["state"] == "BLOCK_RETRIES":
                     incident.update(state="REVIEWED", review_id=identity)
+                    incident["transitions"].append("REVIEWED")
                     data["events"] = [e for e in data["events"] if e["scope"] != incident["scope"]]
             return self.result(item)
 

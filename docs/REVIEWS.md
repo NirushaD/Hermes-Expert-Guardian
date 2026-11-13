@@ -32,17 +32,17 @@ Choose `review_sending_policy=automatic` for unattended consultations. The defau
 
 ## Request and continue
 
-Type `Guardian review: assess the problem we are working on and continue after advice` in chat. This explicit user prefix creates a manual request even with model-requested reviews disabled. Or use **Request Expert review and continue** in settings after selecting the correct durable session ID. Neither requires an incident.
+Type `Guardian review: assess the problem we are working on and continue after advice` in chat. This explicit user prefix creates a manual request even with model-requested reviews disabled. Or use **Request Expert advice** in settings after selecting the correct durable session ID. Neither requires an incident.
 
 The Desktop button submits a real user turn to that exact session using the documented composer API. If no composer accepts it, the request stays queued and the UI tells you to open the session and continue. There is no broadcast or gateway injection. Textual requests use the pre-turn hook and do not require Desktop.
 
 Hermes calls `guardian_review` with the pending `review_id` and a focused diagnostic from its current task context. The plugin removes common identifier patterns, asks the configured local model for an anonymous structured summary, sanitises again, validates, and sends only that packet to Expert. Diagnostic input is limited to 16,000 characters; each outbound field is limited to 800. Raw diagnostic input is never persisted. The local summary has no tools, external fallback or unrelated file access.
 
-With preview sending, refresh incidents, select the review ID, inspect `reviews[].packet`, then click **Approve reviewed summary and continue**. The button submits a turn to retrieve advice. With automatic sending, the tool returns advice during the existing tool loop; no background wake-up is needed.
+With preview sending, open the incident’s linked review (or select a general review in Ask Expert), inspect the displayed summary, then click **Approve summary and get advice**. The button submits a turn to retrieve advice. With automatic sending, the tool returns advice during the existing tool loop; no background wake-up is needed.
 
 On a loop, Guardian's tool-result notice and blocked-operation message tell Hermes to call `guardian_review` with the incident ID and diagnostic. When enabled, the model can also call directly when it needs advice. These triggers depend on the primary model following instructions; Guardian does not force a cloud call from a hook or guarantee the model recognises every uncertainty. Network calls run in the advisory tool, outside short-lived hooks.
 
-Advice instructs Hermes to compare with local evidence, revise its approach, gather missing evidence and verify progress. A loop consultation releases only its associated incident to `REVIEWED` and clears that scope's old detector window. This permits ordinary processing, not a claim of success. Uncertain advice permits evidence gathering too; confidence grants no authority. New repeated failures can create another incident, bounded by budget. A manual review of an existing blocked incident should also supply its `incident_id`.
+Advice instructs Hermes to compare with local evidence, revise its approach, gather missing evidence and verify progress. A loop consultation releases only its associated incident to `REVIEWED` and clears that scope's old detector window. This permits ordinary processing, not a claim of success. The incident remains visible as unverified. After checking the subsequent outcome, the user can record a verification note and explicitly close it; Still unresolved retains it for investigation without granting further attempts. Uncertain advice permits evidence gathering too; confidence grants no authority. New repeated failures can create another incident, bounded by budget. A manual review of an existing blocked incident should also supply its `incident_id`.
 
 ## Failure, cancellation and privacy limits
 
