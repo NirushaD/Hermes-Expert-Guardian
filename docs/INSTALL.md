@@ -1,8 +1,8 @@
-# Hermes Expert Guardian 0.5.0
+# Hermes Expert Guardian 0.5.1
 
 ## Follow an incident to completion
 
-1. Open Expert Guardian. The left column lists chats by their readable names. Use **Find a chat by name** to filter them. Expand a chat to see its incidents, statuses and dates. The focused chat is expanded initially. Duplicate names retain readable dates and numbers; internal keys are never displayed.
+1. Open Expert Guardian. The left column lists only chats with at least one open incident, using their readable names. Chats with no incidents or only resolved incidents are hidden. Advice received without verified closure still counts as open. Use **Find a chat by name** to filter them. Expand a chat to see its incidents, statuses and dates. The focused chat is expanded initially. Duplicate names retain readable dates and numbers; internal keys are never displayed.
 2. Select an incident in the tree. The right column loads its details, six numbered stages, current status and next actor. No incident is selected implicitly. Selecting an incident only loads information; sending a review or authorizing an action still requires the relevant explicit button. Use **Refresh tree** or **Reload incident** when needed; status also refreshes automatically.
 3. In **Review the problem**, describe the public problem and intended outcome, then select **Prepare Expert review**.
 4. Read the exact summary under **Approve what Expert will receive**, then select **Approve summary and get advice**. Loading, polling and selection never approve or send a packet. Expert routing is configured in Hermes auxiliary models.

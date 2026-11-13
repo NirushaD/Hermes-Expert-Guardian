@@ -222,7 +222,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
 }
 // Duplicate names and unnamed chats remain selectable without displaying an ID.
 {
-  const h=harness([]);h.setChats([{id:'session-1',title:'Weekly review',started_at:123},{id:'another-session',title:'Weekly review',started_at:123},{id:'new-chat',title:'',preview:''}]);await h.start()
+  const h=harness([],[incident()]);h.setChatIncidents('another-session',[incident('BLOCK_RETRIES',{id:'duplicate-incident'})]);h.setChatIncidents('new-chat',[incident('REVIEWED',{id:'untitled-incident'})]);h.setChats([{id:'session-1',title:'Weekly review',started_at:123},{id:'another-session',title:'Weekly review',started_at:123},{id:'new-chat',title:'',preview:''}]);await h.start()
   const options=h.render().filter(n=>n.type==='button'&&n.props.role==='treeitem'&&'aria-expanded' in n.props)
   assert.ok(options.some(n=>n.props.children.includes('Chat 1')))
   assert.ok(options.some(n=>n.props.children.includes('Chat 2')))
@@ -301,4 +301,29 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   assert.ok(!h.render().some(n=>n.props.role==='treeitem'&&n.props.value==='root-incident'),'A lineage chat can be collapsed')
 }
 
-console.log('Frontend checks passed: two-column chat tree, explicit selection, cross-chat isolation, lineage, guided steps, readable names and approvals')
+
+// Only chats with unresolved incidents appear, including reviewed-but-unverified work.
+{
+  const h=harness([],[incident('RESOLVED')]);
+  h.setChatIncidents('another-session',[incident('REVIEWED',{id:'unverified'})]);await h.start(false)
+  const chatKeys=h.render().filter(n=>n.props.role==='treeitem'&&'aria-expanded' in n.props).map(n=>n.props.value)
+  assert.deepEqual(chatKeys,['another-session'])
+  assert.equal(h.button('Use focused chat').props.disabled,true)
+}
+// Completing the last incident removes its chat while leaving the closure confirmation visible.
+{
+  const h=harness([],[incident('ESCALATE_TO_USER',{retry_ok:true})]);await h.start()
+  await h.change('What did you check, and what was the result? (no secrets)','Expected result confirmed')
+  await h.check('I verified the intended outcome was achieved.');await h.click('Confirm resolved')
+  assert.ok(h.text().includes('Incident closed'))
+  assert.ok(h.text().includes('No chats with open incidents.'))
+  assert.ok(!h.render().some(n=>n.props.role==='treeitem'&&'aria-expanded' in n.props))
+}
+// Background refresh removes closed-only chats and adds newly open ones.
+{
+  const h=harness([],[incident()]);await h.start(false)
+  h.setIncidents([incident('RESOLVED')]);h.setChatIncidents('new-chat',[incident('BLOCK_RETRIES',{id:'new-open'})]);await h.tick()
+  const chatKeys=h.render().filter(n=>n.props.role==='treeitem'&&'aria-expanded' in n.props).map(n=>n.props.value)
+  assert.deepEqual(chatKeys,['new-chat'])
+}
+console.log('Frontend checks passed: open-incident chat filtering, closure and refresh, tree selection, names and approval isolation')
