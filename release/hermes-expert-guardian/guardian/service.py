@@ -7,6 +7,7 @@ from . import detection, expert, privacy
 
 ACTIVE = {"BLOCK_RETRIES", "AWAIT_EGRESS_APPROVAL", "EXPERT_CONSULTATION", "PROPOSED_FIX",
           "AWAIT_ACTION_APPROVAL", "SINGLE_RETRY", "ESCALATE_TO_USER"}
+CLOSED = {"RESOLVED", "DISMISSED"}
 
 
 class Guardian:
@@ -185,7 +186,8 @@ class Guardian:
                 if failure_code:
                     item["expert_failure"] = failure_code
                 item["transitions"] += ["EXPERT_CONSULTATION", state]
-        return state
+            final_state = item["state"]
+        return final_state
 
     def authorize(self, session, identity, tool, args, success_criteria):
         if not self.enabled() or not self.enforce():
@@ -209,8 +211,8 @@ class Guardian:
         privacy.safe_text(verification, 800)
         with self.store.session(session) as data:
             item = self.find(data, identity)
-            if item["state"] == "RESOLVED":
-                raise ValueError("Incident already resolved")
+            if item["state"] in CLOSED:
+                raise ValueError("Incident already closed")
             if item["state"] == "REVIEWED":
                 if not verification.strip():
                     raise ValueError("Describe the verified advisory outcome")
@@ -230,12 +232,39 @@ class Guardian:
     def unresolved(self, session, identity):
         with self.store.session(session) as data:
             item = self.find(data, identity)
-            if item["state"] != "REVIEWED" and not (item.get("retry_ok") and item["state"] != "RESOLVED"):
+            if item["state"] != "REVIEWED" and not (item.get("retry_ok") and item["state"] not in CLOSED):
                 raise ValueError("Incident is not awaiting outcome verification")
             if not item.get("outcome_unresolved"):
                 item["transitions"].append("OUTCOME_STILL_UNRESOLVED")
             item["outcome_unresolved"] = True
             item["user_verified"] = False
+
+    def dismiss(self, session, identity, reason):
+        """User disposition, not a verified recovery or permission to execute."""
+        privacy.safe_text(reason, 800)
+        if not reason.strip():
+            raise ValueError("Closing reason required")
+        with self.store.session(session) as data:
+            item = self.find(data, identity)
+            if item["state"] not in ACTIVE | {"REVIEWED"}:
+                raise ValueError("Incident is not open")
+            if item.get("consumed") and not item.get("retry_finished"):
+                raise ValueError("Wait for the corrective attempt to finish")
+            item.update(state="DISMISSED", closed_at=time.time(), dismissal_reason=reason.strip(),
+                        user_verified=False, action_approved=False, outcome_unresolved=False)
+            item["transitions"].append("DISMISSED")
+            linked = set()
+            for review in data.get("reviews", []):
+                if review.get("incident") == identity:
+                    linked.add(review["id"])
+                    review["state"] = "CANCELLED"
+                    review.pop("history", None)
+            handoff = data.get("ui_handoff", {})
+            if handoff.get("incident_id") == identity or handoff.get("review_id") in linked:
+                data.pop("ui_handoff", None)
+            if not any(i["id"] != identity and i["scope"] == item["scope"] and i["state"] in ACTIVE
+                       for i in data["incidents"]):
+                data["events"] = [e for e in data["events"] if e["scope"] != item["scope"]]
 
     def context(self, session_id="", **_):
         if not self.enabled() or not session_id:

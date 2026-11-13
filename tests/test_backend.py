@@ -92,3 +92,12 @@ class BackendTests(unittest.TestCase):
             create.return_value.store.incident_index.return_value=[{'session':'chat-key','incidents':[]}]
             self.assertEqual(self.module.incidents(),{'sessions':[{'session':'chat-key','incidents':[]}]})
             create.return_value.store.incident_index.assert_called_once_with()
+
+    def test_dismiss_api_requires_explicit_confirmation(self):
+        from fastapi import HTTPException
+        with patch.object(self.module.integration,'create') as create:
+            with self.assertRaises(HTTPException):
+                self.module.action({'session':'s','incident':'i','action':'dismiss','reason':'Not relevant'})
+            create.return_value.dismiss.assert_not_called()
+            self.assertEqual(self.module.action({'session':'s','incident':'i','action':'dismiss','reason':'Not relevant','confirmed':True}),{'ok':True})
+            create.return_value.dismiss.assert_called_once_with('s','i','Not relevant')
