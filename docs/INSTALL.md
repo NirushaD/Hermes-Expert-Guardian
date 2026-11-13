@@ -1,8 +1,17 @@
-# Hermes Expert Guardian 0.3.2
+# Hermes Expert Guardian 0.4.0
 
-Click **Refresh incidents** to populate **Select an incident**. Each option shows the incident ID, reason and state. A sole active incident is selected automatically; multiple active incidents require selection. Selection fills the Incident ID and displays its packet when available. Legacy send approval remains tied to that session, incident and packet hash; refreshing or choosing an incident never sends it.
+## Follow an incident to completion
 
-For a pending review, click **Load / refresh reviews for this session**, select it from the review list and inspect the displayed anonymous packet. A single pending review is selected automatically. **Approve reviewed summary and continue** is enabled only for a loaded AWAIT_SEND packet in the selected session. If the backend exposes no reviews, restart Hermes to load its updated backend. No approval sends automatically on loading or selection.
+1. Open the chat containing the task, then Expert Guardian. The focused durable chat ID loads initially. Use **Use focused chat** to switch deliberately; **Choose another chat** contains a manual override.
+2. Open an incident from the list. A sole open incident is selected automatically. Its status, next actor and progress are shown above the next action.
+3. In **Review the problem**, describe the public problem and intended outcome, then select **Prepare Expert review**.
+4. Read the exact summary under **Approve what Expert will receive**, then select **Approve summary and get advice**. Loading, polling and selection never approve or send a packet. Expert routing is configured in Hermes auxiliary models.
+5. Review advice against local evidence. If an exact corrective attempt is available, use **Ask Hermes to prepare the action** for help, then enter its tool and command (or argument object), success criteria and evidence confirmation. **Approve one corrective attempt** asks Hermes to run only that operation; native approval still applies. Exact recovery requires Enforce mode.
+6. After a successful corrective result, independently check the outcome, record what you verified, tick the confirmation and select **Confirm resolved**. **Still unresolved** records that the outcome is not achieved and offers investigation without granting another retry.
+7. Advisory reviews appear within their linked incident. Advice can release the previous block so Hermes can continue, but the incident remains **Advice received — outcome not verified** until explicit user verification. Closing an older incident does not clear a newer active incident's detector evidence.
+8. Uncertain advice, provider failures and failed attempts explain the next investigation step. They cannot be closed through a claimed success note that bypasses corrective-result requirements.
+
+The page reloads status every five seconds. Closed incidents retain the checked outcome and history. Technical state and maintenance controls are expandable; **Reset session and delete history** is maintenance, not completion. General advice unrelated to an incident is under **Ask Expert · advice outside an incident**.
 
 ## Expert conversation settings
 
@@ -18,7 +27,7 @@ Enable the agent and Desktop halves for the correct profile. Enable `expert_enab
 
 Set `review_sending_policy=automatic`, `automatic_loop_reviews=true` and `model_requested_reviews=true` for unattended reviews. Defaults retain preview sending with automatic triggers off. Normal Hermes approvals apply to continued processing.
 
-Type `Guardian review: assess our current problem and continue after advice`, or select the session in settings and click **Request Expert review and continue**. The agent prepares a diagnostic, the local model anonymises it, Expert advises, and the agent assesses the advice before continuing. With preview sending, refresh incidents, inspect the chosen review's packet, enter its Review ID and click **Approve reviewed summary and continue**. If no composer accepts the submitted turn, open that session and ask Hermes to continue its pending review.
+Type `Guardian review: assess our current problem and continue after advice`, or select the session in settings and click **Request Expert advice**. The agent prepares a diagnostic, the local model anonymises it, Expert advises, and the agent assesses the advice before continuing. With preview sending, select the review, inspect its displayed packet and click **Approve summary and get advice**. If no composer accepts the submitted turn, open that session and ask Hermes to continue its pending review.
 
 Budget defaults: 3 reviews per session and a 60-second cooldown. Failed and cancelled requests count. A crash in preparation/sending is not automatically retried; cancel before deliberately requesting another. Automatic loop notices depend on the primary model following the instruction to call `guardian_review`.
 
@@ -28,7 +37,7 @@ Full workflow and limits: https://github.com/NirushaD/Hermes-Expert-Guardian/blo
 
 ## Legacy incident recovery workflow (0.1.x)
 
-The instructions below describe the older exact-operation recovery controls, which remain available separately. Their mandatory preview/operation approvals do not apply to the new advisory workflow.
+The exact-operation recovery path is now guided within each incident. Its mandatory preview/operation approvals remain distinct from advisory processing under ordinary Hermes approvals.
 
 Runtime-only plugin package. Default: monitor-only, expert escalation disabled.
 
@@ -40,9 +49,9 @@ This is the supported Git subdirectory syntax. The repository root retains devel
 
 Enable the agent plugin for the intended profile and the Desktop interface. Keep Manual approvals and monitor mode during initial testing. In Desktop → Model → Auxiliary models → Expert, select your preferred provider and model. Guardian supplies no provider/model defaults; Hermes uses its normal fallback routing when no selection is saved. Review the destination before approving a packet. Hermes manages authentication. Existing saved guardian_expert selections remain effective. This does not replace Review or the primary model.
 
-In the Guardian settings page, enter the affected session and incident IDs. Refresh incidents, enter a minimal public description and intended outcome, and prepare a diagnostic preview. Refresh again and review the exact packet before approving cloud submission. Do not paste sensitive material. Egress is always manually approved and tied to the preview hash.
+In Guardian, select the affected task chat and open an incident. Enter a minimal public description and intended outcome, prepare the review and inspect the exact summary before approving cloud submission. Do not paste sensitive material. Egress is always manually approved and tied to the preview hash.
 
-Advice has no tools or agent access. Review it against verified evidence, enter the exact corrective operation JSON and success criteria, then authorize one attempt. Native approval is requested before execution. Verify success before resolving. Failure, uncertain advice or unavailable providers leave retries blocked in Enforce mode.
+Advice has no tools or agent access. Review it against verified evidence, enter the tool name, command (or arguments) and success criteria, then approve one attempt. Native approval is requested before execution. Verify success before resolving. Failure, uncertain advice or unavailable providers leave retries blocked in Enforce mode.
 
 Enforce mode vetoes tool dispatch in the affected scope after deterministic repetition thresholds. Monitor mode reports incidents without vetoing calls. Start with harmless local commands in a fresh session. Existing Telegram bridge handlers and configuration are untouched.
 

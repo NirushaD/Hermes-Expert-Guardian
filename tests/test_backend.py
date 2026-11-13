@@ -40,3 +40,38 @@ class BackendTests(unittest.TestCase):
             self.module.action({"session": "s", "incident": "i", "action": "authorize"})
         create.return_value.authorize.assert_not_called()
 
+
+    def test_http_guided_recovery_through_verified_closure(self):
+        import tempfile
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from guardian.service import Guardian
+        from guardian.state import Store
+        from tests.test_guardian import Fake
+        app = FastAPI()
+        app.include_router(self.module.router)
+        with tempfile.TemporaryDirectory() as scratch:
+            g = Guardian(Store(Path(scratch)/'state.db'), lambda k,d: {'mode':'enforce','expert_enabled':True}.get(k,d), Fake())
+            for _ in range(2):
+                g.post('terminal', {'command':'public-check'}, session_id='s', status='error')
+            with patch.object(self.module.integration, 'create', return_value=g), TestClient(app) as client:
+                item = client.get('/incident?session=s').json()['incidents'][0]
+                identity = {'session':'s','incident':item['id']}
+                def action(kind, **extra):
+                    return client.post('/action',json={**identity,'action':kind,**extra})
+                self.assertEqual(action('resolve',verification='Claimed success').status_code,400)
+                self.assertEqual(action('prepare',description='Public check fails',outcome='Check succeeds').status_code,200)
+                packet = client.get('/incident?session=s').json()['incidents'][0]
+                self.assertEqual(action('send',packet_hash='stale').status_code,400)
+                self.assertEqual(action('send',packet_hash=packet['packet_hash']).json()['state'],'PROPOSED_FIX')
+                self.assertEqual(action('authorize',tool='terminal',args={'command':'public-fix'},criteria='Check succeeds',evidence_reviewed=True).status_code,200)
+                self.assertEqual(g.pre('terminal',{'command':'public-fix'},session_id='s',tool_call_id='attempt')['action'],'approve')
+                g.post('terminal',{'command':'public-fix'},session_id='s',tool_call_id='attempt',status='ok',result={'exit_code':0})
+                self.assertEqual(action('unresolved').status_code,200)
+                self.assertTrue(client.get('/incident?session=s').json()['incidents'][0]['outcome_unresolved'])
+                self.assertEqual(action('resolve',verification='The follow-up check matched the expected output').status_code,200)
+                closed = client.get('/incident?session=s').json()['incidents'][0]
+                self.assertEqual(closed['state'],'RESOLVED')
+                self.assertTrue(closed['user_verified'])
+                self.assertEqual(action('deny').status_code,400,'A stale stop action must not reopen a closed incident')
+                self.assertEqual(action('unresolved').status_code,400)

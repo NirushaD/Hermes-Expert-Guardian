@@ -56,7 +56,9 @@ def action(body: dict):
                 raise ValueError("User must confirm consistency with verified evidence")
             service.authorize(session, identity, body["tool"], body["args"], body["criteria"])
         elif kind == "resolve":
-            service.resolve(session, identity)
+            service.resolve(session, identity, body.get("verification", ""))
+        elif kind == "unresolved":
+            service.unresolved(session, identity)
         elif kind == "reset":
             service.store.delete(session)
         elif kind == "objective":
@@ -68,7 +70,11 @@ def action(body: dict):
                 data["objective"] = body["objective"]
         elif kind == "deny":
             with service.store.session(session) as data:
-                service.find(data, identity)["state"] = "ESCALATE_TO_USER"
+                item = service.find(data, identity)
+                if item["state"] not in {"BLOCK_RETRIES", "AWAIT_EGRESS_APPROVAL"}:
+                    raise ValueError("Incident is not awaiting escalation approval")
+                item["state"] = "ESCALATE_TO_USER"
+                item["transitions"].append("ESCALATE_TO_USER")
         elif kind == "test":
             from importlib import import_module
             return import_module(name + ".selftest").run()

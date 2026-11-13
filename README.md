@@ -1,8 +1,10 @@
-# Hermes Expert Guardian 0.3.2
+# Hermes Expert Guardian 0.4.0
 
-**Incident picker:** refresh incidents and select one from the dropdown showing its ID, reason and state. A sole active incident is selected automatically; its diagnostic preview is displayed with the selection.
+**Guided incident journey:** the current task chat loads automatically. Open an incident to see its readable status, next actor and relevant next action: review the problem → approve the summary → get advice → take action → verify the result → close. The page refreshes every five seconds. Related Expert reviews appear inside the incident; general advice and maintenance have their own expandable sections.
 
-**Approval page fix:** load reviews for the selected session, choose a review from the list, inspect its displayed packet and approve. A sole pending review is selected automatically. Review previews are retained independently of other action results, and approvals are bound to the loaded session and packet.
+**Verified closure:** advice received is not resolution. Advisory incidents remain visible as unverified until the user records a checked outcome and confirms closure. “Still unresolved” keeps the incident open and offers investigation without granting extra retries. Exact corrective recovery still requires approved evidence, one exact operation, native approval and a successful tool result before verification.
+
+See [the workflow and test evidence](docs/RELEASE-0.4.0.md). Built locally; this does not update an installed plugin or publish the release.
 
 **New: bounded Expert conversations.** Enable `expert_conversations` in Agent settings for locally anonymised follow-ups within a review. Set `conversation_max_rounds` (1–6, default 3 including the first reply) and `conversation_approve_each_round` (default on). Every outbound round and its retained conversation history pass the privacy boundary. See [conversation settings](docs/REVIEWS.md).
 
@@ -36,16 +38,16 @@ For an installed SDK compatibility probe, use its Python with `tests/runtime_pro
 4. Enable the **agent plugin** for the intended Desktop profile, then enable its Desktop half if separately listed. Restart the backend through Desktop if its auxiliary-model list has not refreshed.
 5. Open Settings → Plugins → Expert Guardian → Agent settings. Keep mode `monitor` initially. Thresholds clamp to 2–50. Enable `expert_enabled` only when ready for per-packet approvals.
 6. In Desktop auxiliary-model settings choose **Expert** and select your preferred configured provider and model, using Hermes authentication. This is a new auxiliary slot; it does not change Review or the primary model. Do not enter credentials into Guardian descriptions.
-7. The Guardian settings page accepts the affected session ID and incident ID. Refresh incidents, enter a minimal public problem and intended outcome, Prepare diagnostic preview, then Refresh incidents again. Review `packet` and click Approve sending preview to Expert. Approval is tied to `packet_hash`; stale approval is refused.
-8. Review validated advice and independently compare it with verified evidence. Enter an exact corrective operation as `{"tool":"terminal","args":{"command":"..."}}` plus explicit success criteria. Authorize one attempt. Ask the primary agent to perform that exact operation; the native approval gate is requested again. All corrective operations require approval, including high-risk operations.
-9. After an `ok` tool result, the incident remains stopped pending your verification. Only click resolve once the success criteria are met. Errors, denial, invalid advice, low confidence, uncertainty, and unavailable providers leave the incident blocked.
+7. The Guardian page loads the task chat. Open an incident, enter a minimal public problem and intended outcome, then select Prepare Expert review. Inspect the displayed packet and choose Approve summary and get advice. Approval is tied to `packet_hash`; stale approval is refused.
+8. Review validated advice and independently compare it with verified evidence. Enter the tool name, command (or argument object for other tools), and explicit success criteria. Confirm the evidence review and approve one corrective attempt. The page asks Hermes to perform that exact operation; the native approval gate is requested again. All corrective operations require approval, including high-risk operations.
+9. After an `ok` tool result, the incident remains stopped pending your verification. Record the checked result and select Confirm resolved only once the success criteria are met. Errors, denial, invalid advice, low confidence, uncertainty, and unavailable providers leave the incident blocked.
 10. Switch to `enforce` only after testing harmless cases in an isolated session. Existing Telegram bridge registrations and settings are untouched.
 
 ## Settings and controls
 
 Manifest-generated controls include monitoring thresholds, Expert enablement, timeout and [new review settings](docs/REVIEWS.md). Legacy recovery retains one consultation and one exact corrective attempt per incident. New advisory reviews use a session budget and selectable preview/automatic sending. Expert selection uses Hermes auxiliary-model settings.
 
-The Desktop page provides incident history, packet preview, send approval/denial, recovery authorization, explicit success verification, and reset/history deletion for a session. Session IDs are entered explicitly to avoid selecting the wrong active profile/session. An API objective action exists for integrations, but there is no objective control on the current page. Run local safeguard simulations (no cloud) executes 42 bounded engine checks in the Hermes frontend. These simulations do not replace the complete development suite or live native approval acceptance. The first approved consultation is the live connection check.
+The Desktop page provides incident history, packet preview, send approval/denial, recovery authorization, explicit success verification, and reset/history deletion for a session. The focused durable session is loaded initially; Use focused chat and an advanced session override allow deliberate session selection. An API objective action exists for integrations, but there is no objective control on the current page. Run local safeguard simulations (no cloud) executes 42 bounded engine checks in the Hermes frontend. These simulations do not replace the complete development suite or live native approval acceptance. The first approved consultation is the live connection check.
 
 ## Rollback and uninstall
 

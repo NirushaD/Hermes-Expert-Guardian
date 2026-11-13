@@ -200,14 +200,37 @@ class Guardian:
             item["action_approved"] = True
             item["transitions"] += ["AWAIT_ACTION_APPROVAL", "SINGLE_RETRY"]
 
-    def resolve(self, session, identity):
+    def resolve(self, session, identity, verification=""):
+        privacy.safe_text(verification, 800)
         with self.store.session(session) as data:
             item = self.find(data, identity)
-            if not item.get("retry_ok"):
+            if item["state"] == "RESOLVED":
+                raise ValueError("Incident already resolved")
+            if item["state"] == "REVIEWED":
+                if not verification.strip():
+                    raise ValueError("Describe the verified advisory outcome")
+            elif not item.get("retry_ok"):
                 raise ValueError("No successful corrective result to verify")
             item["state"] = "RESOLVED"
             item["user_verified"] = True
-            data["events"] = [e for e in data["events"] if e["scope"] != item["scope"]]
+            item["verification"] = verification.strip()
+            item["resolved_at"] = time.time()
+            item["outcome_unresolved"] = False
+            item["transitions"].append("RESOLVED")
+            # Closing an older advisory incident must not clear a newer loop's evidence.
+            if not any(i["id"] != identity and i["scope"] == item["scope"] and i["state"] in ACTIVE
+                       for i in data["incidents"]):
+                data["events"] = [e for e in data["events"] if e["scope"] != item["scope"]]
+
+    def unresolved(self, session, identity):
+        with self.store.session(session) as data:
+            item = self.find(data, identity)
+            if item["state"] != "REVIEWED" and not (item.get("retry_ok") and item["state"] != "RESOLVED"):
+                raise ValueError("Incident is not awaiting outcome verification")
+            if not item.get("outcome_unresolved"):
+                item["transitions"].append("OUTCOME_STILL_UNRESOLVED")
+            item["outcome_unresolved"] = True
+            item["user_verified"] = False
 
     def context(self, session_id="", **_):
         if not self.enabled() or not session_id:
