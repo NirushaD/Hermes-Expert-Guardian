@@ -1,4 +1,4 @@
-# Hermes Expert Guardian 0.7.0
+# Hermes Expert Guardian 0.7.1
 
 ## Follow an incident to completion
 

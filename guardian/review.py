@@ -68,6 +68,10 @@ class NoRedirect(HTTPRedirectHandler):
         raise ValueError("Local summariser redirects are refused")
 
 
+class LocalOutputLimit(ValueError):
+    """The local model exhausted its response budget before completing JSON."""
+
+
 def local_summary(config, diagnostic):
     return validate_summary(local_json(config, SUMMARY_INSTRUCTIONS, diagnostic))
 
@@ -93,7 +97,13 @@ def local_json(config, instructions, diagnostic, max_tokens=1500):
         encoded = response.read(32769)
     if len(encoded) > 32768:
         raise ValueError("Oversized local response")
-    return json.loads(json.loads(encoded)["choices"][0]["message"]["content"])
+    choice = json.loads(encoded)["choices"][0]
+    if choice.get("finish_reason") == "length":
+        raise LocalOutputLimit("Local model response limit reached")
+    content = choice["message"].get("content")
+    if not isinstance(content,str):
+        raise ValueError("Local model did not return text")
+    return json.loads(content)
 
 
 def validate_summary(value):
