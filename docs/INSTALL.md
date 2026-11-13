@@ -1,8 +1,8 @@
-# Hermes Expert Guardian 0.4.0
+# Hermes Expert Guardian 0.4.1
 
 ## Follow an incident to completion
 
-1. Open the chat containing the task, then Expert Guardian. The focused durable chat ID loads initially. Use **Use focused chat** to switch deliberately; **Choose another chat** contains a manual override.
+1. Open the chat containing the task, then Expert Guardian. The focused chat loads by its readable name. Use **Use focused chat** to switch deliberately; **Choose another chat** contains a searchable chat-name picker. Duplicate names are distinguished by date and a readable chat number; unnamed chats use Untitled chat. Internal keys are never displayed.
 2. Open an incident from the list. A sole open incident is selected automatically. Its status, next actor and progress are shown above the next action.
 3. In **Review the problem**, describe the public problem and intended outcome, then select **Prepare Expert review**.
 4. Read the exact summary under **Approve what Expert will receive**, then select **Approve summary and get advice**. Loading, polling and selection never approve or send a packet. Expert routing is configured in Hermes auxiliary models.
@@ -11,7 +11,7 @@
 7. Advisory reviews appear within their linked incident. Advice can release the previous block so Hermes can continue, but the incident remains **Advice received — outcome not verified** until explicit user verification. Closing an older incident does not clear a newer active incident's detector evidence.
 8. Uncertain advice, provider failures and failed attempts explain the next investigation step. They cannot be closed through a claimed success note that bypasses corrective-result requirements.
 
-The page reloads status every five seconds. Closed incidents retain the checked outcome and history. Technical state and maintenance controls are expandable; **Reset session and delete history** is maintenance, not completion. General advice unrelated to an incident is under **Ask Expert · advice outside an incident**.
+The page reloads status every five seconds. Closed incidents retain the checked outcome and history. Readable incident history and maintenance controls are expandable; **Delete this chat’s Guardian history** is maintenance, not completion. General advice unrelated to an incident is under **Ask Expert · advice outside an incident**.
 
 ## Expert conversation settings
 

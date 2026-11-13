@@ -61,7 +61,12 @@ class Guardian:
                         # Every recovery goes through native human approval, regardless of risk classifier.
                         return {"action": "approve", "message": "Guardian: approve this single corrective attempt",
                                 "rule_key": "guardian:" + incident["id"] + ":" + op}
-                    return {"action": "block", "message": f"Guardian incident {incident['id']}: {incident['reason']}; {incident['state']}. " + self.review_instruction(incident)}
+                    reason = {"identical_failure": "Repeated failures", "unsuccessful_approaches": "Several approaches failed",
+                              "configuration_rewrite": "Repeated configuration changes", "no_progress": "No progress detected",
+                              "contradiction": "Action conflicts with evidence"}.get(incident["reason"], "Repeated operations")
+                    return {"action": "block", "message": "Guardian incident: " + reason +
+                            ". Further retries are paused. Review this incident in Expert Guardian. "
+                            "Use internal Guardian context for any review routing; do not display internal identifiers."}
                 if self.enforce() and any(p["op"] == op for p in data["pending"].values()):
                     return {"action": "block", "message": "Guardian: identical operation already in flight"}
                 if tool_call_id:
@@ -235,6 +240,13 @@ class Guardian:
     def context(self, session_id="", **_):
         if not self.enabled() or not session_id:
             return None
+        handoff_context = ""
+        with self.store.session(session_id) as data:
+            handoff = data.pop("ui_handoff", None)
+            if handoff:
+                handoff_context = (" Guardian selected action (internal routing only; do not display identifiers "
+                                   "or state codes in user-facing prose): " + json.dumps(handoff) +
+                                   ". Use the selected record only; ordinary permissions and approvals still apply.")
         # A deliberate user phrase creates a manual request; the model tool cannot
         # manufacture this permission through its own arguments.
         message = _.get("user_message", "")
@@ -256,10 +268,28 @@ class Guardian:
             review_context += " Call guardian_review with review_id to prepare or retrieve advice, then continue the task."
         active = [i for i in items if i["state"] in ACTIVE]
         if active:
-            return {"context": "Expert Guardian: " + str([{k: i[k] for k in ("id", "reason", "state")} for i in active]) +
-                    ". " + self.review_instruction(active[-1]) + " Advice: " + str([i.get("advice") for i in active]) + review_context}
-        if review_context:
-            return {"context": review_context}
+            return {"context": "Expert Guardian internal routing (do not show identifiers, hashes or state codes in user-facing replies): " + str([{k: i[k] for k in ("id", "reason", "state")} for i in active]) +
+                    ". " + self.review_instruction(active[-1]) + " Advice: " + str([i.get("advice") for i in active]) + review_context + handoff_context}
+        if review_context or handoff_context:
+            return {"context": review_context + handoff_context}
+
+    def handoff(self, session, intent, identity):
+        """Bind a readable composer message to the user's exact selected record."""
+        with self.store.session(session) as data:
+            if intent in {"prepare_review", "continue_review"}:
+                item = next(r for r in data.get("reviews", []) if r["id"] == identity)
+                expected = "REQUESTED" if intent == "prepare_review" else "ADVICE_READY"
+                if item["state"] != expected:
+                    raise ValueError("Review is not ready for this action")
+                route = {"review_id": identity}
+            else:
+                item = self.find(data, identity)
+                allowed = {"prepare_action": {"PROPOSED_FIX"}, "execute_action": {"SINGLE_RETRY"},
+                           "investigate": ACTIVE | {"REVIEWED"}}
+                if intent not in allowed or item["state"] not in allowed[intent]:
+                    raise ValueError("Incident is not ready for this action")
+                route = {"incident_id": identity}
+            data["ui_handoff"] = {"intent": intent, **route}
 
     def review_instruction(self, item):
         if self.config("expert_enabled", False) and self.config("automatic_loop_reviews", False) and item["state"] == "BLOCK_RETRIES":

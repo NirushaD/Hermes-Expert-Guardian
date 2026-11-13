@@ -10,6 +10,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   const states=[],calls=[],notifications=[],submissions=[],effects=[],timers=new Map()
   let cursor=0,tree,rejectSend=false,acceptComposer=true,rejectLoad=false,dirty=false,timerId=0
   let reviews=structuredClone(initialReviews),incidents=structuredClone(initialIncidents),deferredLoad=null
+  let chats=[{id:'session-1',title:'Fix the package installation'},{id:'another-session',title:'Plan the weekly report'},{id:'new-chat',title:'Investigate the new issue'}],rejectNames=false,deferredNames=null
   const ctx={rest:async(path,options)=>{
     calls.push({path,body:options?.body})
     if(path.startsWith('/incident')) {
@@ -33,7 +34,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
     }
     return {ok:true}
   }}
-  const sandbox={host:{state:{focusedStoredSessionId:'session-1'},notify:n=>notifications.push(n),composer:{submit:(...args)=>{submissions.push(args);return acceptComposer}}},
+  const sandbox={host:{state:{focusedStoredSessionId:'session-1',profile:'default',focusedSessionProfile:'default'},request:async(method,params)=>{calls.push({method,params});if(deferredNames){const value=deferredNames;deferredNames=null;return value}if(rejectNames)throw Error('offline');return {sessions:structuredClone(chats)}},notify:n=>notifications.push(n),composer:{submit:(...args)=>{submissions.push(args);return acceptComposer}}},
     useValue:v=>v,useState:initial=>{const i=cursor++;if(!(i in states))states[i]=initial;return [states[i],v=>{states[i]=typeof v==='function'?v(states[i]):v;dirty=true}]},
     useRef:initial=>{const i=cursor++;if(!(i in states))states[i]={current:initial};return states[i]},
     useEffect:(fn,deps)=>{const i=cursor++,previous=states[i];if(!previous || deps.some((v,index)=>!Object.is(v,previous.deps[index]))){states[i]={deps,cleanup:previous?.cleanup};effects.push(()=>{states[i].cleanup?.();states[i].cleanup=fn()})}},
@@ -55,6 +56,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   return {render,button,click,change,check,calls,notifications,submissions,text,settle,tree:()=>{render();return tree},
     start:async()=>{await settle()},tick:async()=>{await Promise.all([...timers.values()].map(fn=>fn()));await settle()},
     setIncidents:items=>{incidents=structuredClone(items)},rejectSend:()=>{rejectSend=true},rejectLoad:()=>{rejectLoad=true},
+    setChats:items=>{chats=structuredClone(items)},rejectNames:()=>{rejectNames=true},deferNames:promise=>{deferredNames=promise},
     rejectComposer:()=>{acceptComposer=false},deferLoad:promise=>{deferredLoad=promise}}
 }
 
@@ -76,8 +78,8 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   assert.ok(!h.text().includes('Public test failure'),'Multiple reviews require explicit choice')
   await h.change('Select a review','two')
   assert.equal(h.button('Approve summary and get advice').props.disabled,false)
-  assert.equal(h.render().find(n=>n.type==='select').props.value,'two')
-  await h.change('Durable session ID (from the chat URL)','another-session')
+  assert.equal(h.render().find(n=>n.type==='label'&&n.props.children[0]==='Select a review').props.children[1].props.value,'two')
+  await h.change('Chat name','another-session')
   assert.ok(!h.text().includes('Public test failure'),'Old selected review is cleared on session change')
 }
 {
@@ -159,11 +161,11 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   await h.change('Problem to review','Draft from first incident')
   h.setIncidents([incident(),incident('BLOCK_RETRIES',{id:'second'})]);await h.tick()
   await h.click('Open incident')
-  assert.equal(h.render().find(n=>n.type==='textarea').props.value,'','Drafts do not leak across incident selections')
+  assert.equal(h.render().find(n=>n.type==='label'&&n.props.children[0]==='Problem to review').props.children[1].props.value,'','Drafts do not leak across incident selections')
 }
 {
   const h=harness();await h.start();h.rejectComposer();await h.click('Approve summary and get advice')
-  assert.ok(h.text().includes('Open this chat'))
+  assert.ok(h.text().includes('Open “Fix the package installation”'))
 }
 {
   const h=harness([],[incident()]);await h.start();h.rejectLoad();await h.click('Reload incidents and reviews')
@@ -174,7 +176,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   const h=harness([],[incident()]);await h.start()
   let release;h.deferLoad(new Promise(resolve=>{release=resolve}))
   const old=h.button('Reload incidents and reviews').props.onClick()
-  await h.change('Durable session ID (from the chat URL)','new-chat')
+  await h.change('Chat name','new-chat')
   release({incidents:[incident('AWAIT_EGRESS_APPROVAL',{packet:{problem:'Stale private preview'},packet_hash:'old'})],reviews:[]})
   await old;await h.settle();assert.ok(!h.text().includes('Stale private preview'))
 }
@@ -198,4 +200,40 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   assert.ok(!h.text().includes('Could not load'))
 }
 
-console.log('Frontend checks passed: guided recovery, advisory linkage, verification, failures, polling, session isolation and exact approvals')
+// Every visible component uses readable labels, including expanded history and results.
+{
+  const h=harness([{...pending('opaque-review-identifier'),time:123}],[incident('REVIEWED',{id:'opaque-incident-identifier',review_id:'opaque-review-identifier',packet_hash:'opaque-packet-hash',scope:'opaque-scope-digest'})]);await h.start()
+  assert.ok(h.text().includes('Selected chat: Fix the package installation'))
+  for(const raw of ['session-1','opaque-review-identifier','opaque-incident-identifier','opaque-packet-hash','opaque-scope-digest','REVIEWED'])assert.ok(!h.text().includes(raw),'Internal value leaked: '+raw)
+  assert.ok(!h.text().includes('Durable session ID'))
+  await h.click('Run local safeguard simulations (no cloud)')
+  assert.ok(!h.text().includes('opaque-'))
+}
+// Duplicate names and unnamed chats remain selectable without displaying an ID.
+{
+  const h=harness([]);h.setChats([{id:'session-1',title:'Weekly review',started_at:123},{id:'another-session',title:'Weekly review',started_at:123},{id:'new-chat',title:'',preview:''}]);await h.start()
+  const options=h.render().filter(n=>n.type==='option'&&n.props.value)
+  assert.ok(options.some(n=>n.props.children.includes('Chat 1')))
+  assert.ok(options.some(n=>n.props.children.includes('Chat 2')))
+  assert.ok(options.some(n=>n.props.children==='Untitled chat'))
+  await h.change('Chat name','another-session')
+  assert.ok(h.text().includes('Selected chat: Weekly review'))
+  assert.ok(h.calls.some(c=>c.path==='/incident?session=another-session'),'Names must not replace the internal routing key')
+}
+// Renamed chats refresh; failed name lookup never falls back to the raw key.
+{
+  const h=harness([]);await h.start();h.setChats([{id:'session-1',title:'Renamed task chat'}]);await h.tick()
+  assert.ok(h.text().includes('Selected chat: Renamed task chat'))
+  h.rejectNames();await h.click('Reload chat names')
+  assert.ok(h.text().includes('Chat names could not be loaded'))
+  assert.ok(!h.text().includes('session-1'))
+}
+// User-visible composer messages omit routing keys; selected routing travels in the API.
+{
+  const h=harness([{...pending(),state:'ADVICE_READY',delivered:true}]);await h.start();await h.change('Select a review','review-1')
+  await h.click('Continue with Hermes')
+  assert.ok(!h.submissions[0][1].includes('review-1'))
+  assert.equal(h.calls.find(c=>c.body?.action==='handoff').body.review_id,'review-1')
+}
+
+console.log('Frontend checks passed: readable chat names, ID-free UI and handoffs, exact routing, guided recovery and approval isolation')

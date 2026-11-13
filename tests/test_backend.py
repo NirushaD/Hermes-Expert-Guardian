@@ -75,3 +75,14 @@ class BackendTests(unittest.TestCase):
                 self.assertTrue(closed['user_verified'])
                 self.assertEqual(action('deny').status_code,400,'A stale stop action must not reopen a closed incident')
                 self.assertEqual(action('unresolved').status_code,400)
+
+    def test_handoff_api_validates_selected_record(self):
+        from fastapi import HTTPException
+        with patch.object(self.module.integration,'create') as create:
+            response=self.module.action({'session':'s','action':'handoff','intent':'continue_review','review_id':'selected-review'})
+            self.assertEqual(response,{'ok':True})
+            create.return_value.handoff.assert_called_once_with('s','continue_review','selected-review')
+        with patch.object(self.module.integration,'create') as create:
+            create.return_value.handoff.side_effect=ValueError('Stale selection')
+            with self.assertRaises(HTTPException):
+                self.module.action({'session':'s','action':'handoff','intent':'continue_review','review_id':'stale-review'})
