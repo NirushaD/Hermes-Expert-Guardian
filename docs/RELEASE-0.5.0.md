@@ -1,0 +1,11 @@
+# Expert Guardian 0.5.0 — chat tree and incident workspace
+
+The main screen has two columns. The left column is a searchable tree of named chats. Expand a chat to see its incidents, readable statuses and detection times. Select an incident to populate the right-hand panel. The right panel shows the chat name, incident details, six numbered stages, current step, next actor and applicable actions. Selection is explicit and read-only: it never sends a review or authorizes a correction.
+
+The selected incident remains highlighted across refreshes. Switching incidents clears unsaved form values and verification confirmations. Slow responses from another chat cannot overwrite the selected incident. Incidents belonging to compressed-chat lineage records are grouped under the same readable chat and remain routed to their exact owning session. Small viewports stack the panels. General advice and maintenance remain available under Other Guardian tools.
+
+A profile-scoped read-only incident index supplies tree summaries from existing Guardian history. It returns status metadata rather than full packets, advice or hashes and does not create session history. The selected incident's full details continue to load through the existing per-session API. No privacy, outbound-summary, operation-approval or attempt-limit rules are relaxed by this layout change.
+
+Validation on 13 November 2026: all 84 tests passed using the installed Hermes Python. The frontend interaction harness covers the two-column structure, initial empty detail panel, explicit selection, cross-chat approval routing, draft clearing, selection persistence, compressed-chat grouping, readable names and previous recovery/approval scenarios. API/store tests cover the read-only incident index, metadata boundaries and state updates across chats. The isolated Hermes SDK/native approval probe passed with zero real tools or cloud requests. JavaScript syntax passed. The standard package scanner rated the package safe with three low-severity literal loopback-address findings; see install-scan-0.5.0.json.
+
+Live visual inspection is not established by the React-hook harness. The computer/browser automation services have been disconnected; installed-version and backend-route checks are recorded separately during deployment. This release is intended for the user's next layout test.

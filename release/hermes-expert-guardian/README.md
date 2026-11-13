@@ -1,9 +1,9 @@
-# Hermes Expert Guardian 0.4.1
+# Hermes Expert Guardian 0.5.0
 
 ## Follow an incident to completion
 
-1. Open the chat containing the task, then Expert Guardian. The focused chat loads by its readable name. Use **Use focused chat** to switch deliberately; **Choose another chat** contains a searchable chat-name picker. Duplicate names are distinguished by date and a readable chat number; unnamed chats use Untitled chat. Internal keys are never displayed.
-2. Open an incident from the list. A sole open incident is selected automatically. Its status, next actor and progress are shown above the next action.
+1. Open Expert Guardian. The left column lists chats by their readable names. Use **Find a chat by name** to filter them. Expand a chat to see its incidents, statuses and dates. The focused chat is expanded initially. Duplicate names retain readable dates and numbers; internal keys are never displayed.
+2. Select an incident in the tree. The right column loads its details, six numbered stages, current status and next actor. No incident is selected implicitly. Selecting an incident only loads information; sending a review or authorizing an action still requires the relevant explicit button. Use **Refresh tree** or **Reload incident** when needed; status also refreshes automatically.
 3. In **Review the problem**, describe the public problem and intended outcome, then select **Prepare Expert review**.
 4. Read the exact summary under **Approve what Expert will receive**, then select **Approve summary and get advice**. Loading, polling and selection never approve or send a packet. Expert routing is configured in Hermes auxiliary models.
 5. Review advice against local evidence. If an exact corrective attempt is available, use **Ask Hermes to prepare the action** for help, then enter its tool and command (or argument object), success criteria and evidence confirmation. **Approve one corrective attempt** asks Hermes to run only that operation; native approval still applies. Exact recovery requires Enforce mode.
@@ -11,7 +11,7 @@
 7. Advisory reviews appear within their linked incident. Advice can release the previous block so Hermes can continue, but the incident remains **Advice received — outcome not verified** until explicit user verification. Closing an older incident does not clear a newer active incident's detector evidence.
 8. Uncertain advice, provider failures and failed attempts explain the next investigation step. They cannot be closed through a claimed success note that bypasses corrective-result requirements.
 
-The page reloads status every five seconds. Closed incidents retain the checked outcome and history. Readable incident history and maintenance controls are expandable; **Delete this chat’s Guardian history** is maintenance, not completion. General advice unrelated to an incident is under **Ask Expert · advice outside an incident**.
+The page reloads status every five seconds. Closed incidents retain the checked outcome and history. Readable incident history and maintenance controls are expandable; **Delete this chat’s Guardian history** is maintenance, not completion. General advice unrelated to an incident and maintenance are collapsed under **Other Guardian tools**.
 
 ## Expert conversation settings
 

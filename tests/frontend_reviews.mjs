@@ -10,16 +10,20 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   const states=[],calls=[],notifications=[],submissions=[],effects=[],timers=new Map()
   let cursor=0,tree,rejectSend=false,acceptComposer=true,rejectLoad=false,dirty=false,timerId=0
   let reviews=structuredClone(initialReviews),incidents=structuredClone(initialIncidents),deferredLoad=null
+  const otherChats=new Map()
   let chats=[{id:'session-1',title:'Fix the package installation'},{id:'another-session',title:'Plan the weekly report'},{id:'new-chat',title:'Investigate the new issue'}],rejectNames=false,deferredNames=null
   const ctx={rest:async(path,options)=>{
     calls.push({path,body:options?.body})
-    if(path.startsWith('/incident')) {
+    if(path==='/incidents')return {sessions:[{session:'session-1',incidents:structuredClone(incidents)},...[...otherChats].map(([session,data])=>({session,incidents:structuredClone(data.incidents)}))]}
+    if(path.startsWith('/incident?')) {
       if(deferredLoad){const next=deferredLoad;deferredLoad=null;return next}
       if(rejectLoad)throw Error('offline')
-      return reviews===null?{incidents}:{incidents:structuredClone(incidents),reviews:structuredClone(reviews),mode}
+      const target=decodeURIComponent(path.split('session=')[1]),data=otherChats.get(target)
+      return data?{...structuredClone(data),mode}:reviews===null?{incidents}:{incidents:structuredClone(incidents),reviews:structuredClone(reviews),mode}
     }
     const body=options.body
-    const i=incidents.find(i=>i.id===body.incident),r=reviews?.find(r=>r.id===body.review_id)
+    const data=otherChats.get(body.session)
+    const i=(data?.incidents || incidents).find(i=>i.id===body.incident),r=(data?.reviews || reviews)?.find(r=>r.id===body.review_id)
     switch(body.action){
       case 'send_review': if(rejectSend)throw Error('stale');r.state='ADVICE_READY';return {state:'ADVICE_READY'}
       case 'cancel_review': r.state='CANCELLED';break
@@ -34,7 +38,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
     }
     return {ok:true}
   }}
-  const sandbox={host:{state:{focusedStoredSessionId:'session-1',profile:'default',focusedSessionProfile:'default'},request:async(method,params)=>{calls.push({method,params});if(deferredNames){const value=deferredNames;deferredNames=null;return value}if(rejectNames)throw Error('offline');return {sessions:structuredClone(chats)}},notify:n=>notifications.push(n),composer:{submit:(...args)=>{submissions.push(args);return acceptComposer}}},
+  const sandbox={host:{state:{focusedStoredSessionId:'session-1',profile:'default',focusedSessionProfile:'default',viewport:{narrow:false,width:1280}},request:async(method,params)=>{calls.push({method,params});if(deferredNames){const value=deferredNames;deferredNames=null;return value}if(rejectNames)throw Error('offline');return {sessions:structuredClone(chats)}},notify:n=>notifications.push(n),composer:{submit:(...args)=>{submissions.push(args);return acceptComposer}}},
     useValue:v=>v,useState:initial=>{const i=cursor++;if(!(i in states))states[i]=initial;return [states[i],v=>{states[i]=typeof v==='function'?v(states[i]):v;dirty=true}]},
     useRef:initial=>{const i=cursor++;if(!(i in states))states[i]={current:initial};return states[i]},
     useEffect:(fn,deps)=>{const i=cursor++,previous=states[i];if(!previous || deps.some((v,index)=>!Object.is(v,previous.deps[index]))){states[i]={deps,cleanup:previous?.cleanup};effects.push(()=>{states[i].cleanup?.();states[i].cleanup=fn()})}},
@@ -53,8 +57,14 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   }
   const check=async(label,value=true)=>{const node=render().find(n=>n.type==='label'&&n.props.children[1]===' '+label);assert.ok(node,label);node.props.children[0].props.onChange({target:{checked:value}});await settle()}
   const text=()=>render().flatMap(n=>[n.props?.children].flat(Infinity).filter(c=>typeof c==='string')).join('\n')
+  const chooseChatIncident=async(target,id)=>{
+    const chat=render().find(n=>n.type==='button'&&n.props.role==='treeitem'&&n.props.value===target&&'aria-expanded' in n.props)
+    assert.ok(chat,'Chat exists in tree');if(!chat.props['aria-expanded']){chat.props.onClick();await settle()}
+    const item=render().find(n=>n.type==='button'&&n.props.role==='treeitem'&&n.props.value===id&&'aria-selected' in n.props)
+    assert.ok(item,'Incident exists under expanded chat');item.props.onClick();await settle()
+  }
   return {render,button,click,change,check,calls,notifications,submissions,text,settle,tree:()=>{render();return tree},
-    start:async()=>{await settle()},tick:async()=>{await Promise.all([...timers.values()].map(fn=>fn()));await settle()},
+    start:async(autoSelect=true)=>{await settle();if(autoSelect){const item=render().find(n=>n.type==='button'&&n.props.role==='treeitem'&&'aria-selected' in n.props);if(item){item.props.onClick();await settle()}}},chooseChatIncident,setChatIncidents:(target,items,advice=[])=>otherChats.set(target,{incidents:structuredClone(items),reviews:structuredClone(advice)}),tick:async()=>{await Promise.all([...timers.values()].map(fn=>fn()));await settle()},
     setIncidents:items=>{incidents=structuredClone(items)},rejectSend:()=>{rejectSend=true},rejectLoad:()=>{rejectLoad=true},
     setChats:items=>{chats=structuredClone(items)},rejectNames:()=>{rejectNames=true},deferNames:promise=>{deferredNames=promise},
     rejectComposer:()=>{acceptComposer=false},deferLoad:promise=>{deferredLoad=promise}}
@@ -79,7 +89,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   await h.change('Select a review','two')
   assert.equal(h.button('Approve summary and get advice').props.disabled,false)
   assert.equal(h.render().find(n=>n.type==='label'&&n.props.children[0]==='Select a review').props.children[1].props.value,'two')
-  await h.change('Chat name','another-session')
+  h.setChatIncidents('another-session',[incident('BLOCK_RETRIES',{id:'other-incident'})]);await h.click('Refresh tree');await h.chooseChatIncident('another-session','other-incident')
   assert.ok(!h.text().includes('Public test failure'),'Old selected review is cleared on session change')
 }
 {
@@ -160,7 +170,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   assert.ok(h.text().includes('Prepare Expert review'),'Sole open incident is selected ahead of closed history')
   await h.change('Problem to review','Draft from first incident')
   h.setIncidents([incident(),incident('BLOCK_RETRIES',{id:'second'})]);await h.tick()
-  await h.click('Open incident')
+  await h.chooseChatIncident('session-1','second')
   assert.equal(h.render().find(n=>n.type==='label'&&n.props.children[0]==='Problem to review').props.children[1].props.value,'','Drafts do not leak across incident selections')
 }
 {
@@ -168,21 +178,22 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   assert.ok(h.text().includes('Open “Fix the package installation”'))
 }
 {
-  const h=harness([],[incident()]);await h.start();h.rejectLoad();await h.click('Reload incidents and reviews')
+  const h=harness([],[incident()]);await h.start();h.rejectLoad();await h.click('Reload incident')
   assert.ok(h.text().includes('Could not load'));assert.ok(!h.text().includes('Prepare Expert review'))
 }
 // A slow response from another chat must not overwrite the current chat.
 {
   const h=harness([],[incident()]);await h.start()
+  h.setChatIncidents('new-chat',[incident('BLOCK_RETRIES',{id:'new-incident'})]);await h.click('Refresh tree')
   let release;h.deferLoad(new Promise(resolve=>{release=resolve}))
-  const old=h.button('Reload incidents and reviews').props.onClick()
-  await h.change('Chat name','new-chat')
+  const old=h.button('Reload incident').props.onClick()
+  await h.chooseChatIncident('new-chat','new-incident')
   release({incidents:[incident('AWAIT_EGRESS_APPROVAL',{packet:{problem:'Stale private preview'},packet_hash:'old'})],reviews:[]})
   await old;await h.settle();assert.ok(!h.text().includes('Stale private preview'))
 }
 // General advice stays accessible when this chat also has an open incident.
 {
-  const h=harness([pending()],[incident()]);await h.start()
+  const h=harness([pending()],[incident()]);await h.start();await h.change('Select a review','review-1')
   assert.ok(h.text().includes('Prepare Expert review'))
   assert.ok(h.text().includes('Public test failure'))
   await h.click('Approve summary and get advice')
@@ -193,7 +204,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
 {
   const h=harness([],[incident()]);await h.start()
   let fail;h.deferLoad(new Promise((_,reject)=>{fail=reject}))
-  const old=h.button('Reload incidents and reviews').props.onClick()
+  const old=h.button('Reload incident').props.onClick()
   await h.tick()
   fail(Error('old request failed'));await old;await h.settle()
   assert.ok(h.text().includes('Prepare Expert review'))
@@ -203,7 +214,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
 // Every visible component uses readable labels, including expanded history and results.
 {
   const h=harness([{...pending('opaque-review-identifier'),time:123}],[incident('REVIEWED',{id:'opaque-incident-identifier',review_id:'opaque-review-identifier',packet_hash:'opaque-packet-hash',scope:'opaque-scope-digest'})]);await h.start()
-  assert.ok(h.text().includes('Selected chat: Fix the package installation'))
+  assert.ok(h.text().includes('Chat: Fix the package installation'))
   for(const raw of ['session-1','opaque-review-identifier','opaque-incident-identifier','opaque-packet-hash','opaque-scope-digest','REVIEWED'])assert.ok(!h.text().includes(raw),'Internal value leaked: '+raw)
   assert.ok(!h.text().includes('Durable session ID'))
   await h.click('Run local safeguard simulations (no cloud)')
@@ -212,19 +223,19 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
 // Duplicate names and unnamed chats remain selectable without displaying an ID.
 {
   const h=harness([]);h.setChats([{id:'session-1',title:'Weekly review',started_at:123},{id:'another-session',title:'Weekly review',started_at:123},{id:'new-chat',title:'',preview:''}]);await h.start()
-  const options=h.render().filter(n=>n.type==='option'&&n.props.value)
+  const options=h.render().filter(n=>n.type==='button'&&n.props.role==='treeitem'&&'aria-expanded' in n.props)
   assert.ok(options.some(n=>n.props.children.includes('Chat 1')))
   assert.ok(options.some(n=>n.props.children.includes('Chat 2')))
-  assert.ok(options.some(n=>n.props.children==='Untitled chat'))
-  await h.change('Chat name','another-session')
-  assert.ok(h.text().includes('Selected chat: Weekly review'))
+  assert.ok(options.some(n=>n.props.children.includes('Untitled chat')))
+  h.setChatIncidents('another-session',[incident('BLOCK_RETRIES',{id:'other-incident'})]);await h.click('Refresh tree');await h.chooseChatIncident('another-session','other-incident')
+  assert.ok(h.text().includes('Chat: Weekly review'))
   assert.ok(h.calls.some(c=>c.path==='/incident?session=another-session'),'Names must not replace the internal routing key')
 }
 // Renamed chats refresh; failed name lookup never falls back to the raw key.
 {
-  const h=harness([]);await h.start();h.setChats([{id:'session-1',title:'Renamed task chat'}]);await h.tick()
-  assert.ok(h.text().includes('Selected chat: Renamed task chat'))
-  h.rejectNames();await h.click('Reload chat names')
+  const h=harness([],[incident()]);await h.start();h.setChats([{id:'session-1',title:'Renamed task chat'}]);await h.tick()
+  assert.ok(h.text().includes('Chat: Renamed task chat'))
+  h.rejectNames();await h.click('Refresh tree')
   assert.ok(h.text().includes('Chat names could not be loaded'))
   assert.ok(!h.text().includes('session-1'))
 }
@@ -236,4 +247,58 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   assert.equal(h.calls.find(c=>c.body?.action==='handoff').body.review_id,'review-1')
 }
 
-console.log('Frontend checks passed: readable chat names, ID-free UI and handoffs, exact routing, guided recovery and approval isolation')
+// The workspace opens without an implicitly selected incident or an approval.
+{
+  const h=harness([],[incident()]);await h.start(false)
+  assert.ok(h.text().includes('Select an incident'))
+  assert.ok(!h.text().includes('Prepare Expert review'))
+  const workspace=h.render().find(n=>n.props['aria-label']==='Incident workspace')
+  assert.equal(workspace.props.style.display,'grid')
+  assert.ok(workspace.props.style.gridTemplateColumns.includes('32%'))
+  assert.ok(h.render().some(n=>n.type==='aside'&&n.props['aria-label']==='Chats and incidents'))
+  await h.chooseChatIncident('session-1','incident-1')
+  assert.ok(h.text().includes('Step 1 of 6'))
+  assert.ok(h.text().includes('Who acts next: You'))
+  assert.ok(h.text().includes('Prepare Expert review'))
+  assert.equal(h.calls.some(c=>c.body?.action),false,'Selection is read-only')
+}
+// A different chat expands independently; selecting its child loads only that incident.
+{
+  const h=harness([],[incident('AWAIT_EGRESS_APPROVAL',{packet:{problem:'First chat preview'},packet_hash:'first-hash'})])
+  h.setChatIncidents('another-session',[incident('AWAIT_EGRESS_APPROVAL',{id:'other-incident',packet:{problem:'Second chat preview'},packet_hash:'second-hash'})])
+  await h.start(false)
+  await h.chooseChatIncident('another-session','other-incident')
+  assert.ok(h.text().includes('Second chat preview'))
+  assert.ok(!h.text().includes('First chat preview'))
+  await h.click('Approve summary and get advice')
+  const send=h.calls.find(c=>c.body?.action==='send').body
+  assert.equal(send.session,'another-session');assert.equal(send.incident,'other-incident');assert.equal(send.packet_hash,'second-hash')
+  const treeItem=h.render().find(n=>n.props.role==='treeitem'&&n.props.value==='other-incident')
+  assert.equal(treeItem.props['aria-selected'],true)
+}
+// Clicking between incidents clears drafts and approvals, and refreshing retains the selection.
+{
+  const h=harness([],[incident(),incident('PROPOSED_FIX',{id:'second'})]);await h.start()
+  await h.change('Problem to review','Draft for first incident')
+  await h.chooseChatIncident('session-1','second')
+  assert.ok(!h.text().includes('Draft for first incident'))
+  assert.equal(h.button('Approve one corrective attempt').props.disabled,true)
+  await h.tick()
+  assert.ok(h.render().some(n=>n.props.role==='treeitem'&&n.props.value==='second'&&n.props['aria-selected']))
+}
+// A compressed chat groups both lineage records and routes the selected incident to its owner.
+{
+  const h=harness([]);h.setChats([{id:'tip-chat',_lineage_root_id:'session-1',title:'Long-running task'}])
+  h.setChatIncidents('tip-chat',[incident('BLOCK_RETRIES',{id:'tip-incident'})])
+  h.setIncidents([incident('BLOCK_RETRIES',{id:'root-incident'})]);await h.start(false)
+  const chat=h.render().find(n=>n.props.role==='treeitem'&&'aria-expanded' in n.props)
+  assert.equal(chat.props['aria-expanded'],true)
+  assert.ok(chat.props.children.includes('(2)'))
+  h.render().find(n=>n.props.role==='treeitem'&&n.props.value==='tip-incident').props.onClick();await h.settle()
+  assert.ok(h.calls.some(c=>c.path==='/incident?session=tip-chat'))
+  assert.ok(h.text().includes('Chat: Long-running task'))
+  h.render().find(n=>n.props.role==='treeitem'&&'aria-expanded' in n.props).props.onClick();await h.settle()
+  assert.ok(!h.render().some(n=>n.props.role==='treeitem'&&n.props.value==='root-incident'),'A lineage chat can be collapsed')
+}
+
+console.log('Frontend checks passed: two-column chat tree, explicit selection, cross-chat isolation, lineage, guided steps, readable names and approvals')

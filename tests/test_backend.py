@@ -86,3 +86,9 @@ class BackendTests(unittest.TestCase):
             create.return_value.handoff.side_effect=ValueError('Stale selection')
             with self.assertRaises(HTTPException):
                 self.module.action({'session':'s','action':'handoff','intent':'continue_review','review_id':'stale-review'})
+
+    def test_incident_tree_index_route(self):
+        with patch.object(self.module.integration,'create') as create:
+            create.return_value.store.incident_index.return_value=[{'session':'chat-key','incidents':[]}]
+            self.assertEqual(self.module.incidents(),{'sessions':[{'session':'chat-key','incidents':[]}]})
+            create.return_value.store.incident_index.assert_called_once_with()

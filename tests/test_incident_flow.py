@@ -119,3 +119,28 @@ class IncidentFlowTests(unittest.TestCase):
         self.assertNotIn(item['id'],message)
         self.assertNotIn('BLOCK_RETRIES',message)
         self.assertNotIn('identical_failure',message)
+
+    def test_incident_index_is_read_only_and_omits_full_records(self):
+        item=self.loop()
+        self.g.prepare('s',item['id'],'Public test problem','Expected outcome')
+        with self.store.session('s') as data:
+            original=dict(data)
+        index=self.store.incident_index()
+        self.assertEqual(len(index),1)
+        self.assertEqual(index[0]['session'],'s')
+        self.assertEqual(index[0]['incidents'][0]['id'],item['id'])
+        self.assertEqual(index[0]['incidents'][0]['state'],'AWAIT_EGRESS_APPROVAL')
+        for key in ['packet','packet_hash','scope','advice','retry_op']:
+            self.assertNotIn(key,index[0]['incidents'][0])
+        self.assertEqual(self.store.incident_index(),index)
+        with self.store.session('s') as data:
+            self.assertEqual(data,original)
+
+    def test_incident_index_tracks_separate_chats_and_resolution(self):
+        item=self.reviewed()
+        for _ in range(2):
+            self.g.post('terminal',{'command':'other-check'},session_id='other',status='error')
+        self.g.resolve('s',item['id'],'Verified the expected outcome')
+        indexed={entry['session']:entry['incidents'] for entry in self.store.incident_index()}
+        self.assertEqual(indexed['s'][0]['state'],'RESOLVED')
+        self.assertEqual(indexed['other'][0]['state'],'BLOCK_RETRIES')

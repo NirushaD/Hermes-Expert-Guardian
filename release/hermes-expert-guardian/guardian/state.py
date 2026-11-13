@@ -30,3 +30,14 @@ class Store:
     def delete(self, identity):
         with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("DELETE FROM sessions WHERE id=?", (identity,))
+
+    def incident_index(self):
+        """Read existing incident summaries without creating chat history."""
+        with closing(sqlite3.connect(self.path)) as db:
+            result = []
+            for identity, encoded in db.execute("SELECT id,data FROM sessions"):
+                data = json.loads(encoded)
+                result.append({"session": identity, "incidents": [
+                    {key: item[key] for key in ("id", "reason", "state", "time", "attempts", "retry_ok", "outcome_unresolved") if key in item}
+                    for item in data.get("incidents", [])]})
+            return result
