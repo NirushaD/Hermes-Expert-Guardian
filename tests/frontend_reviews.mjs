@@ -31,6 +31,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
       case 'prepare': i.state='AWAIT_EGRESS_APPROVAL';i.packet={problem:body.description,intended_outcome:body.outcome};i.packet_hash='incident-hash';break
       case 'send': if(rejectSend)throw Error('stale');i.state='PROPOSED_FIX';i.advice={root_cause:'Test cause',recommended_corrective_action:'Check the fixture'};break
       case 'authorize': i.state='SINGLE_RETRY';i.criteria=body.criteria;break
+      case 'draft_incident': i.draft_status='UNAVAILABLE';return {drafts:[{status:'UNAVAILABLE'}]}
       case 'dismiss': i.state='DISMISSED';i.user_verified=false;i.action_approved=false;i.dismissal_reason=body.reason;break
       case 'resolve': i.state='RESOLVED';i.user_verified=true;i.verification=body.verification;break
       case 'unresolved': i.outcome_unresolved=true;break
@@ -261,7 +262,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   assert.ok(h.text().includes('Step 1 of 6'))
   assert.ok(h.text().includes('Who acts next: You'))
   assert.ok(h.text().includes('Prepare Expert review'))
-  assert.equal(h.calls.some(c=>c.body?.action),false,'Selection is read-only')
+  assert.equal(h.calls.some(c=>c.body?.action && c.body.action!=='draft_incident'),false,'Selection never sends a review or authorizes a correction')
 }
 // A different chat expands independently; selecting its child loads only that incident.
 {
@@ -337,7 +338,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   assert.ok(h.text().includes('Closed without review'))
   assert.ok(h.text().includes('No chats with open incidents.'))
   assert.equal(h.submissions.length,0)
-  const mutations=h.calls.filter(c=>c.body).map(c=>c.body.action)
+  const mutations=h.calls.filter(c=>c.body && c.body.action!=='draft_incident').map(c=>c.body.action)
   assert.deepEqual(mutations,['dismiss'])
   assert.equal(h.calls.find(c=>c.body?.action==='dismiss').body.confirmed,true)
   assert.ok(!h.text().includes('Confirm resolved'))
@@ -349,10 +350,41 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   assert.equal(h.button('Close incident').props.disabled,true)
   await h.click('Keep incident open')
   assert.ok(h.text().includes('Prepare Expert review'))
-  assert.equal(h.calls.some(c=>c.body),false)
+  assert.equal(h.calls.some(c=>c.body && c.body.action!=='draft_incident'),false)
 }
 {
   const h=harness([],[incident('AWAIT_ACTION_APPROVAL',{consumed:true,retry_finished:false})]);await h.start()
   assert.equal(h.button('Close without review').props.disabled,true)
 }
-console.log('Frontend checks passed: close without review, confirmation, open-chat filter, exact selection and approval isolation')
+// Locally generated text prefills both fields, while user edits survive background updates.
+{
+  const h=harness([],[incident('BLOCK_RETRIES',{draft_status:'READY',problem_statement:'The public fixture cannot be read.',expected_outcome:'Read and verify the expected fixture.'})]);await h.start()
+  const value=label=>h.render().find(n=>n.type==='label'&&n.props.children[0]===label).props.children[1].props.value
+  assert.equal(value('Problem to review'),'The public fixture cannot be read.')
+  assert.equal(value('What should success look like?'),'Read and verify the expected fixture.')
+  assert.equal(h.button('Prepare Expert review').props.disabled,false)
+  await h.change('Problem to review','My checked problem statement')
+  await h.change('What should success look like?','My success criteria')
+  h.setIncidents([incident('BLOCK_RETRIES',{draft_status:'READY',problem_statement:'A later local draft.',expected_outcome:'A later proposed outcome.'})]);await h.tick()
+  assert.equal(value('Problem to review'),'My checked problem statement')
+  assert.equal(value('What should success look like?'),'My success criteria')
+  await h.click('Use generated draft')
+  assert.equal(value('Problem to review'),'A later local draft.')
+  assert.equal(value('What should success look like?'),'A later proposed outcome.')
+}
+// Legacy selection queues one local-only draft and never loops on unavailable generation.
+{
+  const h=harness([],[incident()]);await h.start();await h.tick();await h.tick()
+  assert.equal(h.calls.filter(c=>c.body?.action==='draft_incident').length,1)
+  assert.equal(h.calls.some(c=>['send','send_review','authorize'].includes(c.body?.action)),false)
+  assert.equal(h.submissions.length,0)
+}
+// Drafts are scoped to the selected incident; switching discards the previous draft edits.
+{
+  const h=harness([],[incident('BLOCK_RETRIES',{draft_status:'READY',problem_statement:'First problem',expected_outcome:'First outcome'}),incident('BLOCK_RETRIES',{id:'second',draft_status:'READY',problem_statement:'Second problem',expected_outcome:'Second outcome'})]);await h.start()
+  await h.change('Problem to review','First custom edit');await h.chooseChatIncident('session-1','second')
+  const fields=h.render().filter(n=>n.type==='textarea').map(n=>n.props.value)
+  assert.ok(fields.includes('Second problem'));assert.ok(fields.includes('Second outcome'));assert.ok(!fields.includes('First custom edit'))
+}
+
+console.log('Frontend checks passed: local draft prefilling, edit preservation, legacy generation, tree selection, closure and approval isolation')

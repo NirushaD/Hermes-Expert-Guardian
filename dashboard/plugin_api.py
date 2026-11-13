@@ -38,6 +38,8 @@ def action(body: dict):
             raise ValueError("Session required")
         kind = body["action"]
         identity = body.get("incident", "")
+        if kind == "draft_incident":
+            return {"drafts":service.start_incident_drafts(session,identity,retry=True)}
         if kind == "handoff":
             service.handoff(session, body["intent"], body.get("review_id") or identity)
             return {"ok": True}
@@ -72,6 +74,8 @@ def action(body: dict):
         elif kind == "unresolved":
             service.unresolved(session, identity)
         elif kind == "reset":
+            from importlib import import_module
+            import_module(name + ".incident_drafts").forget(service,session)
             service.store.delete(session)
         elif kind == "objective":
             from importlib import import_module

@@ -12,6 +12,9 @@ const STATUS = {
   REQUESTED:['Waiting for Hermes to prepare a summary','Hermes',0], PREPARING:['Preparing an anonymous summary','Hermes',0],
   SENDING:['Getting Expert advice','Expert',2], ADVICE_READY:['Advice ready','Hermes / you',3], FAILED:['Review failed','You',2], CANCELLED:['Review cancelled','You',0]
 }
+const DRAFT_STATUS = {PENDING:'Local draft pending',QUEUED:'Waiting for the local model',GENERATING:'Your local model is drafting the incident',READY:'Drafted by your local model',UNAVAILABLE:'Local model is not configured',FAILED:'Local drafting could not complete'}
+const TRIGGERS = {identical_failure:'The same operation returned the same failure repeatedly.',unsuccessful_approaches:'Several different approaches failed within this task.',configuration_rewrite:'Repeated file or configuration changes did not establish progress.',no_progress:'Repeated observations returned unchanged results.',contradiction:'A proposed file change conflicts with recent local evidence.'}
+const incidentTitle = item => {const text=item.problem_statement || REASONS[item.reason] || 'Incident';return text.length>120?text.slice(0,117)+'…':text}
 const CLOSED = new Set(['RESOLVED','DISMISSED'])
 const STEPS = ['Review problem','Approve summary','Get advice','Take action','Verify result','Closed']
 const box = {border:'1px solid #727b8880',borderRadius:8,padding:16,margin:'14px 0'}
@@ -67,6 +70,8 @@ function Settings({ctx}) {
   const [review,setReview] = useState('')
   const [dismissOpen,setDismissOpen] = useState(false)
   const [dismissReason,setDismissReason] = useState('Not relevant for review')
+  const draftForm = useRef({key:'',problemDirty:false,outcomeDirty:false})
+  const draftRequested = useRef(new Set())
   const [description,setDescription] = useState('')
   const [outcome,setOutcome] = useState('')
   const [tool,setTool] = useState('terminal')
@@ -90,7 +95,7 @@ function Settings({ctx}) {
   const related = reviews.filter(r=>r.incident===incident)
   const selectedReview = reviews.find(r=>r.id===review && !r.incident)
   const isLive = target => currentSession.current===target && currentProfile.current===profile
-  const clearForm = () => {setDismissOpen(false);setDismissReason('Not relevant for review');setDescription('');setOutcome('');setTool('terminal');setArgumentsText('');setVerified(false);setVerification('');setEvidenceReviewed(false)}
+  const clearForm = () => {draftForm.current={key:'',problemDirty:false,outcomeDirty:false};setDismissOpen(false);setDismissReason('Not relevant for review');setDescription('');setOutcome('');setTool('terminal');setArgumentsText('');setVerified(false);setVerification('');setEvidenceReviewed(false)}
   const chooseIncident = (id,target=session) => {
     pendingIncident.current={session:target,id}
     currentIncident.current=id
@@ -138,6 +143,20 @@ function Settings({ctx}) {
     const timer=setInterval(()=>{if(!busy){if(session.trim())refresh(true);loadChats()}},5000)
     return ()=>clearInterval(timer)
   },[session,busy,incident,review,profile])
+  useEffect(()=>{
+    if(!selected)return
+    const key=profile+'|'+session+'|'+incident
+    if(draftForm.current.key!==key)draftForm.current={key,problemDirty:false,outcomeDirty:false}
+    if(!draftForm.current.problemDirty)setDescription(selected.packet?.problem || selected.problem_statement || '')
+    if(!draftForm.current.outcomeDirty)setOutcome(selected.criteria || selected.packet?.intended_outcome || selected.expected_outcome || '')
+    if(!selected.draft_status && !CLOSED.has(selected.state) && !draftRequested.current.has(key)){
+      draftRequested.current.add(key)
+      const target=session
+      ctx.rest('/action',{method:'POST',body:{session:target,incident,action:'draft_incident'}})
+        .then(()=>{if(isLive(target))refresh(true)})
+        .catch(()=>{if(isLive(target))setError('The local draft could not start. Reload the incident and try Generate local draft.')})
+    }
+  },[profile,session,incident,selected?.id,selected?.problem_statement,selected?.expected_outcome,selected?.draft_status,selected?.packet_hash])
   const submit = async (target,text,route) => {
     if(route){
       try {await ctx.rest('/action',{method:'POST',body:{session:target,action:'handoff',...route}})}
@@ -165,7 +184,7 @@ function Settings({ctx}) {
       if(action==='reset'){setSnapshot(null);setIncident('');setReview('');clearForm()}
       else {setVerified(false);setEvidenceReviewed(false);setDismissOpen(false)}
       if(action!=='test')await Promise.all([refresh(true),loadChats()])
-      setMessage(previous=>previous || (action==='dismiss'?'Incident closed without review. Closing it did not authorize or verify a correction.':action==='resolve'?'Incident closed after your verification.':action==='test'?(data.passed?'Local safeguard checks passed. No cloud requests or real tools.':'Some safeguard checks failed. Open safeguard check results.'):'Step saved. The current status and next action are shown below.'))
+      setMessage(previous=>previous || (action==='draft_incident'?'Local drafting requested. This does not send anything to Expert.':action==='dismiss'?'Incident closed without review. Closing it did not authorize or verify a correction.':action==='resolve'?'Incident closed after your verification.':action==='test'?(data.passed?'Local safeguard checks passed. No cloud requests or real tools.':'Some safeguard checks failed. Open safeguard check results.'):'Step saved. The current status and next action are shown below.'))
       return true
     } catch {
       if(isLive(target)){
@@ -220,7 +239,7 @@ function Settings({ctx}) {
           const items=incidentRows(row), expanded=chatKeys(row).some(key=>expandedChats.includes(key))
           return jsxs('li',{role:'none',style:{margin:'8px 0'},children:[
             jsx('button',{type:'button',role:'treeitem',value:row.id,'aria-expanded':expanded,'aria-label':optionName(row),onClick:()=>toggleChat(row),onKeyDown:event=>treeKey(event,row),style:{...inputStyle,textAlign:'left',fontWeight:600,overflowWrap:'anywhere',cursor:'pointer',margin:0},children:(expanded?'▾ ':'▸ ')+optionName(row)+' ('+items.length+')'}),
-            expanded && jsx('ul',{role:'group',style:{listStyle:'none',padding:'4px 0 4px 16px'},children:items.length?items.map((item,index)=>jsx('li',{role:'none',children:jsxs('button',{type:'button',role:'treeitem',value:item.id,'aria-selected':session===item.owner && incident===item.id,'aria-label':(REASONS[item.reason] || 'Incident')+' · '+dated(item.time)+' · Incident '+(index+1),onClick:()=>chooseIncident(item.id,item.owner),onKeyDown:event=>treeKey(event,row,true),style:{...inputStyle,textAlign:'left',cursor:'pointer',margin:'6px 0',borderWidth:session===item.owner && incident===item.id?2:1,fontWeight:session===item.owner && incident===item.id?600:400},children:[jsx('span',{style:{display:'block'},children:REASONS[item.reason] || 'Incident'}),jsx('small',{style:{display:'block'},children:(session===item.owner && incident===item.id?'Selected · ':'')+status(item)[0]}),jsx('small',{style:{display:'block'},children:dated(item.time)})]})},item.owner+':'+item.id)):jsx('li',{children:paragraph(chatSnapshot?'No incidents recorded.':'Loading incidents…')})})
+            expanded && jsx('ul',{role:'group',style:{listStyle:'none',padding:'4px 0 4px 16px'},children:items.length?items.map((item,index)=>jsx('li',{role:'none',children:jsxs('button',{type:'button',role:'treeitem',value:item.id,'aria-selected':session===item.owner && incident===item.id,'aria-label':incidentTitle(item)+' · '+dated(item.time)+' · Incident '+(index+1),onClick:()=>chooseIncident(item.id,item.owner),onKeyDown:event=>treeKey(event,row,true),style:{...inputStyle,textAlign:'left',cursor:'pointer',margin:'6px 0',borderWidth:session===item.owner && incident===item.id?2:1,fontWeight:session===item.owner && incident===item.id?600:400},children:[jsx('span',{style:{display:'block'},children:incidentTitle(item)}),jsx('small',{style:{display:'block'},children:(session===item.owner && incident===item.id?'Selected · ':'')+status(item)[0]}),jsx('small',{style:{display:'block'},children:dated(item.time)})]})},item.owner+':'+item.id)):jsx('li',{children:paragraph(chatSnapshot?'No incidents recorded.':'Loading incidents…')})})
           ]},row.id)
         })})
       ]}),
@@ -239,9 +258,19 @@ function Settings({ctx}) {
         field('Reason for closing (no secrets)',dismissReason,setDismissReason),
         button('Close incident',()=>act('dismiss',{reason:dismissReason.trim(),confirmed:true}),!dismissReason.trim()),button('Keep incident open',()=>setDismissOpen(false))]}),
       jsx('ol',{'aria-label':'Incident progress',style:{display:'grid',gridTemplateColumns:'repeat(3, minmax(0, 1fr))',gap:8,padding:0,listStyle:'none'},children:STEPS.map((step,index)=>jsx('li',{'aria-current':index===currentStatus[2]?'step':undefined,style:{fontWeight:index===currentStatus[2]?700:400,padding:8,border:'1px solid currentColor',borderRadius:5},children:(index+1)+'. '+step},step))}),
-      jsxs('section',{style:box,children:[heading('Step '+(currentStatus[2]+1)+' of '+STEPS.length+' · '+currentStatus[0]),paragraph('Who acts next: '+currentStatus[1]+'.'),paragraph('Observed '+(selected.attempts || 0)+' failed or repeated attempts. '+(selected.packet?.problem || 'Guardian detected a repeated pattern; the cause still needs review.'))]}),
-      selected.state==='BLOCK_RETRIES' && jsxs('section',{style:box,children:[heading('1. Review the problem'),paragraph('Describe the problem and what a successful result looks like. Keep secrets and identifying details out of these fields.'),
-        field('Problem to review',description,setDescription,true),field('What should success look like?',outcome,setOutcome,true),
+      jsxs('section',{style:box,children:[heading('Step '+(currentStatus[2]+1)+' of '+STEPS.length+' · '+currentStatus[0]),paragraph('Who acts next: '+currentStatus[1]+'.'),paragraph('Why this incident was generated: '+(selected.trigger_explanation || TRIGGERS[selected.reason] || 'Guardian detected repeated operations requiring attention.')),paragraph('Observed '+(selected.attempts || 0)+' failed or repeated attempts.')]}),
+      selected.state!=='BLOCK_RETRIES' && !CLOSED.has(selected.state) && jsxs('section',{style:box,children:[heading('Local incident draft'),
+        paragraph(DRAFT_STATUS[selected.draft_status] || 'This older incident needs a local draft.'),
+        fields({problem_statement:selected.problem_statement || selected.packet?.problem || 'Local draft not yet available.',expected_outcome:selected.expected_outcome || selected.packet?.intended_outcome || 'Check the intended task outcome.'}),
+        ['FAILED','UNAVAILABLE'].includes(selected.draft_status) && button('Generate local draft',()=>act('draft_incident'))]}),
+      selected.state==='BLOCK_RETRIES' && jsxs('section',{style:box,children:[heading('1. Review the problem'),paragraph('Your local model drafts the problem and expected outcome. Check and edit these before preparing an Expert review.'),
+        paragraph(DRAFT_STATUS[selected.draft_status] || 'This older incident needs a local draft.'),
+        selected.draft_status==='READY' && paragraph(selected.draft_evidence==='detector_metadata_only'?'Only detector evidence was available. Task-specific details remain uncertain; check the intended outcome.':'Generated locally from the reported task and available evidence. It is a draft, not a verified diagnosis.'),
+        selected.draft_status==='UNAVAILABLE' && paragraph('Set the local summary model in Guardian Agent settings. No cloud fallback is used.'),
+        ['FAILED','UNAVAILABLE'].includes(selected.draft_status) && paragraph(selected.draft_error==='queue_full'?'The local drafting queue is full. Try again after current drafts finish.':'Check that the configured local model is running, then retry.'),
+        (!selected.draft_status || ['PENDING','FAILED','UNAVAILABLE'].includes(selected.draft_status) || ['QUEUED','GENERATING'].includes(selected.draft_status) && Date.now()/1000-selected.draft_started_at>120) && button('Generate local draft',()=>act('draft_incident')),
+        field('Problem to review',description,value=>{draftForm.current.problemDirty=true;setDescription(value)},true),field('What should success look like?',outcome,value=>{draftForm.current.outcomeDirty=true;setOutcome(value)},true),
+        selected.draft_status==='READY' && button('Use generated draft',()=>{draftForm.current.problemDirty=false;draftForm.current.outcomeDirty=false;setDescription(selected.problem_statement || '');setOutcome(selected.expected_outcome || '')}),
         button('Prepare Expert review',()=>act('prepare',{description:description.trim(),outcome:outcome.trim()}),!description.trim() || !outcome.trim())]}),
       selected.state==='AWAIT_EGRESS_APPROVAL' && approval(selected,true),
       selected.state==='EXPERT_CONSULTATION' && paragraph('Expert is reviewing the approved summary. This page refreshes automatically.'),
@@ -249,7 +278,7 @@ function Settings({ctx}) {
       selected.state==='PROPOSED_FIX' && jsxs('section',{style:box,children:[heading('4. Review and approve one action'),paragraph('Expert advice grants no permission. Review the evidence, enter the exact action and define success. Hermes will also request its normal native approval.'),
         button('Ask Hermes to prepare the action',()=>continueChat('For the selected Guardian incident, compare Expert advice with local evidence and propose one exact corrective operation. Show the tool name, command or argument object, expected result and risks so I can review them in Guardian. Do not execute the operation before authorization.',{intent:'prepare_action',incident:selected.id})),
         field('Tool name',tool,setTool),field(tool==='terminal'?'Command to run':'Tool arguments (JSON object)',argumentsText,setArgumentsText,true),
-        field('Success criteria',outcome,setOutcome,true),check('I checked this action against the evidence.',evidenceReviewed,setEvidenceReviewed),
+        field('Success criteria',outcome,value=>{draftForm.current.outcomeDirty=true;setOutcome(value)},true),check('I checked this action against the evidence.',evidenceReviewed,setEvidenceReviewed),
         button('Approve one corrective attempt',()=>{
           try {
             const args=tool.trim()==='terminal'?{command:argumentsText}:JSON.parse(argumentsText)
