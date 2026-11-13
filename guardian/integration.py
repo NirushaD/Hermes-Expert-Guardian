@@ -4,8 +4,17 @@ from .state import Store
 from pathlib import Path
 import json
 from .review import Reviews
+from .incident_drafts import read_history, shutdown
 
 ID = "hermes-expert-guardian"
+
+
+def _draft_after_hook(service, session):
+    if session and service.enabled():
+        try:
+            service.start_incident_drafts(session)
+        except Exception:
+            pass  # Optional local drafting must never alter the detector's decision.
 
 
 def create(ctx=None):
@@ -22,22 +31,33 @@ def create(ctx=None):
         state, config, llm = ctx.state, ctx.get_config, ctx.llm
     data_dir = Path(state.data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
-    return Guardian(Store(data_dir / "guardian.sqlite3"), config, llm)
+    # Resolve the profile-owned path now; worker threads must not inherit another profile.
+    history_path = data_dir.parent.parent / "state.db"
+    return Guardian(Store(data_dir / "guardian.sqlite3"), config, llm,
+                    draft_history=lambda session,when:read_history(history_path,session,when))
 
 
 def register(ctx):
+    if hasattr(ctx,"on_unload"):
+        ctx.on_unload(shutdown)
     ctx.register_auxiliary_task("guardian_expert", display_name="Expert",
         description="Guardian: validated diagnostic packets only; text-only independent advice",
         defaults={"timeout": 60})
     # Lazy initialization keeps plugin discovery and admission read-only.
     def pre(**kwargs):
         try:
-            return create(ctx).pre(**kwargs)
+            service = create(ctx)
+            result = service.pre(**kwargs)
+            _draft_after_hook(service,kwargs.get("session_id"))
+            return result
         except Exception:
             if ctx.get_config("mode", "monitor") == "enforce":
                 return {"action": "block", "message": "Guardian initialization failed; user intervention required"}
     def post(**kwargs):
-        return create(ctx).post(**kwargs)
+        service = create(ctx)
+        result = service.post(**kwargs)
+        _draft_after_hook(service,kwargs.get("session_id"))
+        return result
     def context(**kwargs):
         return create(ctx).context(**kwargs)
     def transform(**kwargs):

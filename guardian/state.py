@@ -12,10 +12,12 @@ class Store:
             db.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, touched REAL, data TEXT)")
 
     @contextmanager
-    def session(self, identity):
+    def session(self, identity, create=True):
         with closing(sqlite3.connect(self.path, timeout=2)) as db, db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT data FROM sessions WHERE id=?", (identity,)).fetchone()
+            if row is None and not create:
+                raise LookupError("Session no longer exists")
             if row is None and db.execute("SELECT count(*) FROM sessions").fetchone()[0] >= 512:
                 raise RuntimeError("Guardian capacity reached; delete inactive history explicitly")
             data = json.loads(row[0]) if row else {"events": [], "incidents": [], "pending": {}, "objective": ""}
@@ -38,6 +40,9 @@ class Store:
             for identity, encoded in db.execute("SELECT id,data FROM sessions"):
                 data = json.loads(encoded)
                 result.append({"session": identity, "incidents": [
-                    {key: item[key] for key in ("id", "reason", "state", "time", "attempts", "retry_ok", "outcome_unresolved") if key in item}
+                    {key: item[key] for key in ("id", "reason", "state", "time", "attempts", "retry_ok", "outcome_unresolved", "draft_status") if key in item}
                     for item in data.get("incidents", [])]})
+                for summary,item in zip(result[-1]["incidents"],data.get("incidents", [])):
+                    if isinstance(item.get("problem_statement"),str):
+                        summary["problem_statement"] = item["problem_statement"][:160]
             return result

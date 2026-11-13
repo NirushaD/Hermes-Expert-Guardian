@@ -69,6 +69,10 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def local_summary(config, diagnostic):
+    return validate_summary(local_json(config, SUMMARY_INSTRUCTIONS, diagnostic))
+
+
+def local_json(config, instructions, diagnostic, max_tokens=1500):
     """Literal loopback IP only, no proxy, redirects, credentials or fallback."""
     endpoint = config("local_summary_url", "http://127.0.0.1:1234/v1/chat/completions")
     model = config("local_summary_model", "")
@@ -80,17 +84,16 @@ def local_summary(config, diagnostic):
             or not ipaddress.ip_address(url.hostname).is_loopback):
         raise ValueError("Local summary endpoint must be a literal loopback HTTP address")
     payload = json.dumps({"model": model, "messages": [
-        {"role": "system", "content": SUMMARY_INSTRUCTIONS},
+        {"role": "system", "content": instructions},
         {"role": "user", "content": sanitise(diagnostic)}],
-        "temperature": 0, "max_tokens": 1500, "stream": False}).encode()
+        "temperature": 0, "max_tokens": max_tokens, "stream": False}).encode()
     request = Request(endpoint, data=payload, headers={"Content-Type": "application/json"}, method="POST")
     opener = build_opener(ProxyHandler({}), NoRedirect())
     with opener.open(request, timeout=60) as response:
         encoded = response.read(32769)
     if len(encoded) > 32768:
         raise ValueError("Oversized local response")
-    value = json.loads(json.loads(encoded)["choices"][0]["message"]["content"])
-    return validate_summary(value)
+    return json.loads(json.loads(encoded)["choices"][0]["message"]["content"])
 
 
 def validate_summary(value):

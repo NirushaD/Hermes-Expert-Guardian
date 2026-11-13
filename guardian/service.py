@@ -3,7 +3,7 @@ import copy
 import json
 import time
 import uuid
-from . import detection, expert, privacy
+from . import detection, expert, privacy, incident_drafts
 
 ACTIVE = {"BLOCK_RETRIES", "AWAIT_EGRESS_APPROVAL", "EXPERT_CONSULTATION", "PROPOSED_FIX",
           "AWAIT_ACTION_APPROVAL", "SINGLE_RETRY", "ESCALATE_TO_USER"}
@@ -11,8 +11,9 @@ CLOSED = {"RESOLVED", "DISMISSED"}
 
 
 class Guardian:
-    def __init__(self, store, config=lambda key, default: default, llm=None):
+    def __init__(self, store, config=lambda key, default: default, llm=None, draft_history=None):
         self.store, self.config, self.llm = store, config, llm
+        self.draft_history = draft_history
 
     def enabled(self):
         return self.config("enabled", True) is True
@@ -40,6 +41,7 @@ class Guardian:
             return None
         if not session_id:
             return {"action": "block", "message": "Guardian requires session identity"} if self.enforce() else None
+        incident_drafts.remember(self,session_id,_.get("user_task", ""))
         try:
             with self.store.session(session_id) as data:
                 scope = self.scope(data, task_id, tool_name, args)
@@ -50,6 +52,7 @@ class Guardian:
                         data["incidents"].append({"id": uuid.uuid4().hex[:12], "scope": scope, "reason": "contradiction",
                             "state": "BLOCK_RETRIES", "attempts": 1, "escalations": 0, "time": time.time(),
                             "transitions": ["NORMAL", "LOOP_CONFIRMED", "BLOCK_RETRIES"]})
+                        incident_drafts.seed(data["incidents"][-1],tool_name)
                 if self.enforce() and len(data["incidents"]) >= 64:
                     return {"action": "block", "message": "Guardian incident capacity reached; user must reset session"}
                 incident = next((i for i in reversed(data["incidents"]) if i["state"] in ACTIVE and
@@ -86,6 +89,8 @@ class Guardian:
         with self.store.session(session_id) as data:
             data["pending"].pop(tool_call_id, None)
             scope = self.scope(data, task_id, tool_name, args)
+            incident_drafts.remember(self,session_id,_.get("user_task", ""),
+                                     {"activity":incident_drafts.tool_category(tool_name),"status":status,"reported_result":incident_drafts.clean(result,1200)},scope)
             op = detection.operation(tool_name, args)
             active = next((i for i in reversed(data["incidents"]) if i["state"] in ACTIVE and
                            (i["scope"] == scope or (tool_call_id and i.get("retry_call") == tool_call_id))), None)
@@ -132,6 +137,7 @@ class Guardian:
                 data["incidents"].append({"id": uuid.uuid4().hex[:12], "scope": scope, "reason": why,
                     "state": "BLOCK_RETRIES", "attempts": sum(e["scope"] == scope for e in events),
                     "escalations": 0, "time": time.time(), "transitions": ["NORMAL", "SUSPECTED_LOOP", "LOOP_CONFIRMED", "BLOCK_RETRIES"]})
+                incident_drafts.seed(data["incidents"][-1],tool_name)
                 # Capacity is enforced before dispatch; never evict an unresolved block.
                 if len(data["incidents"]) > 64:
                     data["incidents"] = data["incidents"][:64]
@@ -139,6 +145,9 @@ class Guardian:
     def view(self, session):
         with self.store.session(session) as data:
             return copy.deepcopy({"incidents": data["incidents"], "reviews": data.get("reviews", []), "objective": data["objective"], "mode": self.config("mode", "monitor")})
+
+    def start_incident_drafts(self, session, identity=None, retry=False):
+        return incident_drafts.schedule(self,session,identity,retry)
 
     def prepare(self, session, identity, description, outcome):
         with self.store.session(session) as data:
@@ -224,6 +233,9 @@ class Guardian:
             item["resolved_at"] = time.time()
             item["outcome_unresolved"] = False
             item["transitions"].append("RESOLVED")
+            if item.get("draft_status") in {"PENDING","QUEUED","GENERATING"}:
+                item["draft_status"] = "CANCELLED"
+                item.pop("draft_job",None)
             # Closing an older advisory incident must not clear a newer loop's evidence.
             if not any(i["id"] != identity and i["scope"] == item["scope"] and i["state"] in ACTIVE
                        for i in data["incidents"]):
@@ -253,6 +265,9 @@ class Guardian:
             item.update(state="DISMISSED", closed_at=time.time(), dismissal_reason=reason.strip(),
                         user_verified=False, action_approved=False, outcome_unresolved=False)
             item["transitions"].append("DISMISSED")
+            if item.get("draft_status") in {"PENDING","QUEUED","GENERATING"}:
+                item["draft_status"] = "CANCELLED"
+                item.pop("draft_job",None)
             linked = set()
             for review in data.get("reviews", []):
                 if review.get("incident") == identity:
@@ -269,6 +284,7 @@ class Guardian:
     def context(self, session_id="", **_):
         if not self.enabled() or not session_id:
             return None
+        incident_drafts.remember(self,session_id,_.get("user_message", ""))
         handoff_context = ""
         with self.store.session(session_id) as data:
             handoff = data.pop("ui_handoff", None)

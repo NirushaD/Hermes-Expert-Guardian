@@ -101,3 +101,11 @@ class BackendTests(unittest.TestCase):
             create.return_value.dismiss.assert_not_called()
             self.assertEqual(self.module.action({'session':'s','incident':'i','action':'dismiss','reason':'Not relevant','confirmed':True}),{'ok':True})
             create.return_value.dismiss.assert_called_once_with('s','i','Not relevant')
+
+    def test_local_draft_api_is_scoped_to_selected_incident(self):
+        with patch.object(self.module.integration,'create') as create:
+            create.return_value.start_incident_drafts.return_value=[{'incident':'i','status':'QUEUED'}]
+            response=self.module.action({'session':'s','incident':'i','action':'draft_incident'})
+            self.assertEqual(response['drafts'][0]['status'],'QUEUED')
+            create.return_value.start_incident_drafts.assert_called_once_with('s','i',retry=True)
+            create.return_value.send.assert_not_called()

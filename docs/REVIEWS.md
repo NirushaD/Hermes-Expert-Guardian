@@ -53,3 +53,12 @@ Stable placeholders preserve repeated identifiers within each sanitisation pass.
 ## Validation
 
 Regression tests cover manual requests without incidents, chat requests, loop notices, session isolation, endpoint validation, redaction, preview hashes, concurrent consultation deduplication, budgets, cancellation, failures and tool delivery. Provider calls are mocked. Live Desktop composer acceptance, local anonymisation quality, Expert connectivity and installed-runtime dispatch remain separate acceptance checks.
+
+
+## Automatic incident descriptions (0.7.0)
+
+Detector incidents receive a trigger explanation immediately. After the hook returns its normal decision, a bounded local-only worker drafts problem_statement and expected_outcome using the configured local summary endpoint/model. The local draft has no tools and no cloud fallback, and it does not consume the Expert review budget. Two workers and a 32-job queue bound concurrency and memory. Calls retain the existing loopback/path/proxy/redirect restrictions and a 60-second timeout.
+
+Inputs are limited, locally sanitized task and tool observations held transiently. For older incidents, the backend can read only a bounded pre-incident window in that exact chat's profile database, read-only. No raw history or tool output is persisted in Guardian's records or appended to an external packet. Generated fields are sanitized and validated before storage; identifier removal remains best effort. Missing evidence is explicitly uncertain. Only detector metadata is used when historical evidence is unavailable.
+
+The UI prefills drafts without overwriting user edits or an already prepared approval packet. Existing incidents draft when selected. Generation failures retain useful trigger-based text and offer an explicit retry; no repeated automatic retry loop is used. Interrupted queued work can be retried after two minutes. Closing an incident discards pending draft results, and deleting its history prevents workers from recreating it. Plugin unload stops new worker jobs and returns unstarted work to pending.
