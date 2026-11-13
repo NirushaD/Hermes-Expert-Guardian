@@ -202,15 +202,18 @@ function Settings({ctx}) {
     const items=cached.flatMap(entry=>(entry.session===session && loaded?incidents:entry.incidents).map(item=>({...item,owner:entry.session})))
     return [...items].sort((a,b)=>(a.state==='RESOLVED')-(b.state==='RESOLVED') || (b.time || 0)-(a.time || 0))
   }
+  const openChats=treeRows.filter(row=>incidentRows(row).some(item=>item.state!=='RESOLVED'))
+  const visibleChats=openChats.filter(row=>row.id===session || optionName(row).toLowerCase().includes(chatSearch.toLowerCase()))
   return jsxs('main',{style:{padding:20,maxWidth:1440,margin:'0 auto',lineHeight:1.5},children:[
     jsx('h2',{children:'Expert Guardian'}),paragraph('Choose a chat and incident on the left. Follow the steps on the right.'),
     jsxs('div',{'aria-label':'Incident workspace',style:{display:'grid',gridTemplateColumns:viewport?.narrow?'minmax(0, 1fr)':'minmax(260px, 32%) minmax(0, 1fr)',gap:24,alignItems:'start'},children:[
       jsxs('aside',{'aria-label':'Chats and incidents',style:{...box,margin:0,position:viewport?.narrow?'static':'sticky',top:12,maxHeight:viewport?.narrow?360:'75vh',overflowY:'auto',minWidth:0},children:[
         heading('Chats and incidents'),field('Find a chat by name',chatSearch,setChatSearch),
-        button('Refresh tree',loadChats),button('Use focused chat',()=>{if(focusedChat){setExpandedChats(previous=>previous.includes(focusedChat)?previous:[...previous,focusedChat]);chooseIncident('',focusedChat);loadChats()}},!focusedChat),
+        button('Refresh tree',loadChats),button('Use focused chat',()=>{if(focusedChat){setExpandedChats(previous=>previous.includes(focusedChat)?previous:[...previous,focusedChat]);chooseIncident('',focusedChat);loadChats()}},!focusedChat || !openChats.some(row=>chatKeys(row).includes(focusedChat))),
         chatError && jsx('p',{role:'alert',children:chatError}),
-        !treeRows.length && paragraph('No chats available. Open a task chat, then refresh the tree.'),
-        jsx('ul',{role:'tree','aria-label':'Chat incident tree',style:{listStyle:'none',padding:0,margin:0},children:treeRows.filter(row=>row.id===session || optionName(row).toLowerCase().includes(chatSearch.toLowerCase())).map(row=>{
+        !openChats.length && paragraph(chatSnapshot?'No chats with open incidents.':chatError?'Refresh the tree to load open incidents.':'Loading chats with open incidents…'),
+        openChats.length>0 && !visibleChats.length && paragraph('No matching chats with open incidents.'),
+        jsx('ul',{role:'tree','aria-label':'Chat incident tree',style:{listStyle:'none',padding:0,margin:0},children:visibleChats.map(row=>{
           const items=incidentRows(row), expanded=chatKeys(row).some(key=>expandedChats.includes(key))
           return jsxs('li',{role:'none',style:{margin:'8px 0'},children:[
             jsx('button',{type:'button',role:'treeitem',value:row.id,'aria-expanded':expanded,'aria-label':optionName(row),onClick:()=>toggleChat(row),onKeyDown:event=>treeKey(event,row),style:{...inputStyle,textAlign:'left',fontWeight:600,overflowWrap:'anywhere',cursor:'pointer',margin:0},children:(expanded?'▾ ':'▸ ')+optionName(row)+' ('+items.length+')'}),
