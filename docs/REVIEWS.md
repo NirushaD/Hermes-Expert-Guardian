@@ -32,7 +32,7 @@ Choose `review_sending_policy=automatic` for unattended consultations. The defau
 
 ## Request and continue
 
-Type `Guardian review: assess the problem we are working on and continue after advice` in chat. This explicit user prefix creates a manual request even with model-requested reviews disabled. Or use **Request Expert advice** in settings after selecting the correct durable session ID. Neither requires an incident.
+Type `Guardian review: assess the problem we are working on and continue after advice` in chat. This explicit user prefix creates a manual request even with model-requested reviews disabled. Or use **Request Expert advice** in settings after selecting the task chat by name. Neither requires an incident.
 
 The Desktop button submits a real user turn to that exact session using the documented composer API. If no composer accepts it, the request stays queued and the UI tells you to open the session and continue. There is no broadcast or gateway injection. Textual requests use the pre-turn hook and do not require Desktop.
 

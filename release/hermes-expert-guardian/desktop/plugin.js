@@ -17,6 +17,8 @@ const box = {border:'1px solid #727b8880',borderRadius:8,padding:16,margin:'14px
 const inputStyle = {display:'block',boxSizing:'border-box',width:'100%',padding:9,marginTop:5,border:'1px solid #727b88',borderRadius:5,background:'transparent',color:'inherit'}
 const readable = key => key.replaceAll('_',' ').replace(/^./,c=>c.toUpperCase())
 const status = item => item?.outcome_unresolved && item.state!=='RESOLVED' ? ['Outcome still unresolved','You',4] : item?.retry_ok && item.state!=='RESOLVED' ? ['Verify the result','You',4] : STATUS[item?.state] || ['Unknown status — reload before acting','You',0]
+const chatName = row => [row?.title,row?.preview].find(value=>typeof value==='string' && value.trim() && ![row?.id,row?._lineage_root_id,row?.resolved_id].includes(value.trim()))?.trim() || 'Untitled chat'
+const dated = value => value ? new Date(value*1000).toLocaleString() : 'Date unavailable'
 const heading = text => jsx('h3',{children:text})
 const paragraph = text => jsx('p',{children:text})
 const details = (title, children) => jsxs('details',{style:box,children:[jsx('summary',{children:title}),children]})
@@ -24,7 +26,35 @@ const fields = value => jsx('dl',{children:Object.entries(value || {}).map(([key
 
 function Settings({ctx}) {
   const activeSession = useValue(host.state.focusedStoredSessionId)
-  const [session,setSession] = useState(activeSession || '')
+  const profile = useValue(host.state.profile)
+  const focusedProfile = useValue(host.state.focusedSessionProfile)
+  const focusedChat = !focusedProfile || focusedProfile===profile ? activeSession : null
+  const [session,setSession] = useState(focusedChat || '')
+  const [chatSnapshot,setChatSnapshot] = useState(null)
+  const [chatError,setChatError] = useState('')
+  const [chatSearch,setChatSearch] = useState('')
+  const chatVersion = useRef(0)
+  const currentProfile = useRef(profile)
+  currentProfile.current=profile
+  const chats = chatSnapshot?.profile===profile ? chatSnapshot.chats : []
+  const chatRow = chats.find(row=>row.id===session || row._lineage_root_id===session || row.resolved_id===session)
+  const optionName = row => {
+    const name=chatName(row), peers=chats.filter(other=>chatName(other)===name)
+    return peers.length>1 ? name+' · '+dated(row.started_at)+' · Chat '+(peers.indexOf(row)+1) : name
+  }
+  const selectedChatName = chatRow ? optionName(chatRow) : session===focusedChat ? 'Current chat' : 'Chat unavailable'
+  const loadChats = async () => {
+    const target=profile, version=++chatVersion.current
+    try {
+      const data=await host.request('session.list',{profile:target,limit:1000})
+      if(target!==currentProfile.current || version!==chatVersion.current)return
+      if(!Array.isArray(data?.sessions))throw Error('Invalid chat list')
+      setChatSnapshot({profile:target,chats:data.sessions.filter(row=>typeof row.id==='string' && row.id)})
+      setChatError('')
+    } catch {
+      if(target===currentProfile.current && version===chatVersion.current){setChatSnapshot(null);setChatError('Chat names could not be loaded. Open the task chat and use focused chat, or reload the chat list.')}
+    }
+  }
   const [snapshot,setSnapshot] = useState(null)
   const [incident,setIncident] = useState('')
   const [review,setReview] = useState('')
@@ -43,14 +73,14 @@ function Settings({ctx}) {
   currentSession.current = session.trim()
   const requestVersion = useRef(0)
   const mutationLock = useRef(false)
-  const loaded = snapshot?.session===session.trim() ? snapshot : null
+  const loaded = snapshot?.session===session.trim() && snapshot?.profile===profile ? snapshot : null
   const incidents = loaded?.incidents || []
   const reviews = loaded?.reviews || []
   const selected = incidents.find(i=>i.id===incident)
   const standalone = reviews.filter(r=>!r.incident)
   const related = reviews.filter(r=>r.incident===incident)
   const selectedReview = reviews.find(r=>r.id===review && !r.incident)
-  const isLive = target => currentSession.current===target
+  const isLive = target => currentSession.current===target && currentProfile.current===profile
   const clearForm = () => {setDescription('');setOutcome('');setTool('terminal');setArgumentsText('');setVerified(false);setVerification('');setEvidenceReviewed(false)}
   const chooseIncident = id => {setIncident(id);setReview('');clearForm();setMessage('');setError('')}
   const refresh = async (quiet=false) => {
@@ -62,7 +92,7 @@ function Settings({ctx}) {
       if(!isLive(target) || version!==requestVersion.current)return
       const items=Array.isArray(data.incidents)?data.incidents:[]
       const advice=Array.isArray(data.reviews)?data.reviews:[]
-      setSnapshot({...data,session:target,incidents:items,reviews:advice})
+      setSnapshot({...data,session:target,profile,incidents:items,reviews:advice})
       if(!items.some(i=>i.id===incident)) {
         const open=items.filter(i=>i.state!=='RESOLVED')
         setIncident(open.length===1?open[0].id:items.length===1?items[0].id:'')
@@ -77,13 +107,20 @@ function Settings({ctx}) {
       if(isLive(target) && version===requestVersion.current){setSnapshot(null);setError('Could not load this chat. Check the session and connection, then reload.')}
     } finally {if(!quiet)setBusy(false)}
   }
-  useEffect(()=>{setSnapshot(null);setIncident('');setReview('');clearForm();setMessage('');setError('');refresh()},[session])
+  useEffect(()=>{setChatSnapshot(null);setSession(focusedChat || '');loadChats()},[profile])
+  useEffect(()=>{loadChats()},[activeSession])
+  useEffect(()=>{setSnapshot(null);setIncident('');setReview('');clearForm();setMessage('');setError('');refresh()},[session,profile])
   useEffect(()=>{
-    const timer=setInterval(()=>{if(!busy && session.trim())refresh(true)},5000)
+    const timer=setInterval(()=>{if(!busy){if(session.trim())refresh(true);loadChats()}},5000)
     return ()=>clearInterval(timer)
-  },[session,busy,incident,review])
-  const submit = (target,text) => {
-    if(!host.composer.submit(target,text))setMessage('Waiting for Hermes. Open this chat and ask Hermes to continue the pending Guardian step.')
+  },[session,busy,incident,review,profile])
+  const submit = async (target,text,route) => {
+    if(route){
+      try {await ctx.rest('/action',{method:'POST',body:{session:target,action:'handoff',...route}})}
+      catch {if(isLive(target))setError('The selected step has changed. Reload and select it again before continuing.');return}
+    }
+    if(!isLive(target))return
+    if(!host.composer.submit(target,text))setMessage('Waiting for Hermes. Open “'+selectedChatName+'” and ask Hermes to continue the pending Guardian step.')
   }
   const act = async (action,extra={}) => {
     if(busy || mutationLock.current || !session.trim())return false
@@ -97,14 +134,14 @@ function Settings({ctx}) {
       setResult(data)
       if(action==='request_review') {
         setReview(data.review_id)
-        submit(target,'Use guardian_review with review_id '+data.review_id+'. Prepare a focused diagnostic from our current task, then assess Expert advice against local evidence and continue under normal approvals.')
+        await submit(target,'Prepare the selected Guardian review for this chat, then assess Expert advice against local evidence and continue under normal approvals. Use the internal Guardian context to identify the selected review.',{intent:'prepare_review',review_id:data.review_id})
       }
-      if(action==='send_review' && data.state==='ADVICE_READY')submit(target,'Retrieve guardian_review review_id '+extra.review_id+' and assess the advice against local evidence, then continue under normal approvals. Do not claim the incident resolved until the outcome is verified.')
-      if(action==='authorize')submit(target,'Guardian incident '+identity+' has one exact corrective attempt authorized: '+JSON.stringify({tool:extra.tool,args:extra.args})+'. Success criteria: '+extra.criteria+'. Perform only this exact operation under native approval, then report the result. Do not claim resolution until user verification.')
+      if(action==='send_review' && data.state==='ADVICE_READY')await submit(target,'Continue the selected Expert review for this chat. Assess its advice against local evidence and continue under normal approvals. Verify the outcome before claiming resolution.',{intent:'continue_review',review_id:extra.review_id})
+      if(action==='authorize')await submit(target,'The selected Guardian incident has one corrective attempt authorized: '+JSON.stringify({tool:extra.tool,args:extra.args})+'. Success criteria: '+extra.criteria+'. Perform only this exact operation under native approval, then report the result. Do not claim resolution until user verification.',{intent:'execute_action',incident:identity})
       if(action==='reset'){setSnapshot(null);setIncident('');setReview('');clearForm()}
       else {setVerified(false);setEvidenceReviewed(false)}
       if(action!=='test')await refresh(true)
-      setMessage(previous=>previous || (action==='resolve'?'Incident closed after your verification.':action==='test'?(data.passed?'Local safeguard checks passed. No cloud requests or real tools.':'Some safeguard checks failed. Open technical details.'):'Step saved. The current status and next action are shown below.'))
+      setMessage(previous=>previous || (action==='resolve'?'Incident closed after your verification.':action==='test'?(data.passed?'Local safeguard checks passed. No cloud requests or real tools.':'Some safeguard checks failed. Open safeguard check results.'):'Step saved. The current status and next action are shown below.'))
       return true
     } catch {
       if(isLive(target)){
@@ -117,7 +154,7 @@ function Settings({ctx}) {
   const button = (text,fn,disabled=false) => jsx('button',{type:'button',disabled:busy || disabled,onClick:fn,style:{padding:'9px 12px',margin:'5px 8px 5px 0',border:'1px solid #727b88',borderRadius:5,background:'transparent',color:'inherit'},children:text})
   const field = (label,value,change,multiline=false) => jsxs('label',{style:{display:'block',margin:'14px 0'},children:[label,jsx(multiline?'textarea':'input',{value,onChange:e=>change(e.target.value),rows:multiline?3:undefined,style:inputStyle})]})
   const check = (label,value,change) => jsxs('label',{style:{display:'block',margin:'14px 0'},children:[jsx('input',{type:'checkbox',checked:value,onChange:e=>change(e.target.checked)}),' '+label]})
-  const continueChat = text => {setMessage('');submit(session.trim(),text)}
+  const continueChat = (text,route) => {setMessage('');return submit(session.trim(),text,route)}
   const approval = (item,isIncident=false) => {
     const canApprove = item?.state===(isIncident?'AWAIT_EGRESS_APPROVAL':'AWAIT_SEND') && !!item.packet_hash && !!item.packet
     return jsxs('section',{style:box,children:[heading('Approve what Expert will receive'),paragraph('Read the exact summary below. Only this approved packet is sent. Expert routing is configured in Hermes auxiliary models → Expert.'),
@@ -128,27 +165,32 @@ function Settings({ctx}) {
   const advice = item => item?.advice && jsxs('section',{style:box,children:[heading('Expert advice'),paragraph('Compare this recommendation with local evidence before acting.'),fields(item.advice)]})
   const reviewCard = item => item && jsxs('section',{style:box,children:[heading('Expert review · '+status(item)[0]),paragraph('Next actor: '+status(item)[1]+'.'+(item.round?' Round '+item.round+'.':'')),
     item.state==='AWAIT_SEND' && approval(item),advice(item),
-    item.state==='ADVICE_READY' && button('Continue with Hermes',()=>continueChat('Retrieve guardian_review review_id '+item.id+'; compare the advice with evidence and continue under normal approvals. Verify the outcome with the user.')),
-    item.state==='REQUESTED' && button('Ask Hermes to prepare summary',()=>continueChat('Use guardian_review with review_id '+item.id+' and prepare a focused diagnostic from the task.')),
+    item.state==='ADVICE_READY' && button('Continue with Hermes',()=>continueChat('Continue the selected Expert review. Compare its advice with evidence and continue under normal approvals. Verify the outcome with me.',{intent:'continue_review',review_id:item.id})),
+    item.state==='REQUESTED' && button('Ask Hermes to prepare summary',()=>continueChat('Prepare a focused diagnostic for the selected Guardian review from this task.',{intent:'prepare_review',review_id:item.id})),
     ['PREPARING','SENDING'].includes(item.state) && paragraph('Waiting for processing. This page refreshes automatically. If processing was interrupted, cancel this review before deliberately requesting another.'),
     item.state==='FAILED' && paragraph('The review could not complete. Check local summary / Expert settings. A new request still uses the session budget and cooldown.'),
     !['CANCELLED','ADVICE_READY'].includes(item.state) && button('Cancel this review',()=>act('cancel_review',{review_id:item.id})),
-    details('Review technical details',fields(item))]},item.id)
+    details('Review summary',fields({status:status(item)[0],requested:dated(item.time),round:item.round || 1}))]},item.id)
   const currentStatus=status(selected)
   const canVerify=selected && selected.state!=='RESOLVED' && (selected.retry_ok || selected.state==='REVIEWED')
   return jsxs('main',{style:{padding:20,maxWidth:920,margin:'0 auto',lineHeight:1.5},children:[
     jsx('h2',{children:'Expert Guardian · Incidents'}),paragraph('Track the problem, review advice, take action and verify the outcome.'),
-    jsxs('section',{style:box,children:[heading('Task chat'),paragraph(session?'Selected chat: '+session:'Open the chat containing your task, then use focused chat.'),
-      button('Use focused chat',()=>setSession(activeSession || ''),!activeSession),button('Reload incidents and reviews',()=>refresh(),!session.trim()),
-      details('Choose another chat',field('Durable session ID (from the chat URL)',session,value=>{setSession(value);clearForm()})),
+    jsxs('section',{style:box,children:[heading('Task chat'),paragraph(session?'Selected chat: '+selectedChatName:'Open the chat containing your task, then use focused chat.'),
+      chatError && jsx('p',{role:'alert',children:chatError}),
+      button('Use focused chat',()=>{setSession(focusedChat || '');loadChats()},!focusedChat),button('Reload incidents and reviews',async()=>{await Promise.all([refresh(),loadChats()])},!session.trim()),
+      details('Choose another chat',jsxs('div',{children:[field('Find a chat by name',chatSearch,setChatSearch),
+        jsxs('label',{children:['Chat name',jsx('select',{style:inputStyle,value:session,onChange:e=>{setSession(e.target.value);clearForm()},children:[jsx('option',{value:'',children:'Choose a chat'}),
+          session && !chats.some(row=>row.id===session) && jsx('option',{value:session,children:selectedChatName}),
+          ...chats.filter(row=>row.id===session || optionName(row).toLowerCase().includes(chatSearch.toLowerCase())).map(row=>jsx('option',{value:row.id,children:optionName(row)},row.id))]})]}),
+        button('Reload chat names',loadChats)]})),
       loaded && paragraph(loaded.mode==='enforce'?'Enforce mode: Guardian blocks repeated operations until an allowed next step.':'Monitor mode: incidents are recorded; Guardian does not block operations.')]}),
     error && jsx('p',{role:'alert',style:box,children:error}),message && jsx('p',{role:'status',style:box,children:message}),
     busy && paragraph('Loading or processing…'),
-    loaded && jsxs('section',{style:box,children:[heading('Incidents in this chat'),
+    loaded && jsxs('section',{style:box,children:[heading('Incidents in “'+selectedChatName+'”'),
       !incidents.length && paragraph('No incidents recorded. You can still ask Expert for advice below.'),
       ...[...incidents].sort((a,b)=>(a.state==='RESOLVED')-(b.state==='RESOLVED') || (b.time || 0)-(a.time || 0)).map(i=>jsxs('article',{style:{padding:'10px 0',borderBottom:'1px solid #727b8840'},children:[
         jsx('strong',{children:REASONS[i.reason] || readable(i.reason || 'Incident')}),paragraph(status(i)[0]+' · Next: '+status(i)[1]+(i.time?' · '+new Date(i.time*1000).toLocaleString():'')),
-        button(i.id===incident?'Viewing incident':'Open incident',()=>chooseIncident(i.id)),jsx('small',{children:'Reference '+i.id})]},i.id))]}),
+        button(i.id===incident?'Viewing incident':'Open incident',()=>chooseIncident(i.id))]},i.id))]}),
     selected && jsxs('section',{'aria-label':'Incident journey',children:[
       heading(REASONS[selected.reason] || readable(selected.reason || 'Incident')),
       jsx('ol',{'aria-label':'Incident progress',style:{display:'flex',flexWrap:'wrap',gap:24,paddingLeft:24},children:STEPS.map((step,index)=>jsx('li',{'aria-current':index===currentStatus[2]?'step':undefined,style:{fontWeight:index===currentStatus[2]?700:400},children:step},step))}),
@@ -160,7 +202,7 @@ function Settings({ctx}) {
       selected.state==='EXPERT_CONSULTATION' && paragraph('Expert is reviewing the approved summary. This page refreshes automatically.'),
       advice(selected),
       selected.state==='PROPOSED_FIX' && jsxs('section',{style:box,children:[heading('4. Review and approve one action'),paragraph('Expert advice grants no permission. Review the evidence, enter the exact action and define success. Hermes will also request its normal native approval.'),
-        button('Ask Hermes to prepare the action',()=>continueChat('For Guardian incident '+selected.id+', compare Expert advice with local evidence and propose one exact corrective operation. Show the tool name, command or argument object, expected result and risks so I can review them in Guardian. Do not execute the operation before authorization.')),
+        button('Ask Hermes to prepare the action',()=>continueChat('For the selected Guardian incident, compare Expert advice with local evidence and propose one exact corrective operation. Show the tool name, command or argument object, expected result and risks so I can review them in Guardian. Do not execute the operation before authorization.',{intent:'prepare_action',incident:selected.id})),
         field('Tool name',tool,setTool),field(tool==='terminal'?'Command to run':'Tool arguments (JSON object)',argumentsText,setArgumentsText,true),
         field('Success criteria',outcome,setOutcome,true),check('I checked this action against the evidence.',evidenceReviewed,setEvidenceReviewed),
         button('Approve one corrective attempt',()=>{
@@ -173,10 +215,10 @@ function Settings({ctx}) {
         loaded.mode!=='enforce' && paragraph('Corrective authorization requires Enforce mode. Change mode deliberately in Agent settings before authorizing recovery.')]}),
       ['SINGLE_RETRY','AWAIT_ACTION_APPROVAL'].includes(selected.state) && paragraph('One exact attempt is authorized. Continue in the task chat and complete any native approval there. Guardian is waiting for the tool result; authorization alone does not mean it ran.'),
       selected.state==='REVIEWED' && paragraph('Advice released this incident’s previous block so Hermes can continue. The outcome remains unverified. Related reviews and their advice are below.'),
-      selected.state==='REVIEWED' && button('Continue with Hermes',()=>continueChat('Retrieve guardian_review review_id '+selected.review_id+' for incident '+selected.id+'. Compare the advice with local evidence and continue under normal approvals. Report success checks; user verification is still required.')),
+      selected.state==='REVIEWED' && button('Continue with Hermes',()=>continueChat('Continue the selected incident’s Expert review. Compare the advice with local evidence and continue under normal approvals. Report success checks; my verification is still required.',{intent:'continue_review',review_id:selected.review_id})),
       (selected.outcome_unresolved || selected.state==='ESCALATE_TO_USER' && !selected.retry_ok) && jsxs('section',{style:box,children:[heading('Choose the next step'),paragraph(selected.outcome_unresolved?'The intended outcome has not been achieved. Keep this incident open and investigate the remaining problem. This does not grant another corrective attempt.':selected.retry_finished?'The corrective attempt did not succeed. This incident has no further corrective attempts available. Keep it open and investigate a different approach.':selected.expert_failure?'Expert review failed: '+readable(selected.expert_failure)+'. This incident remains open.':'Advice is inconclusive, more evidence is needed, or escalation was stopped. This incident remains open.'),
         paragraph('Ask Hermes to explain the evidence gaps and propose a different approach. This does not authorize another blocked operation or repeat consultation.'),
-        button('Ask Hermes to investigate',()=>continueChat('Guardian incident '+selected.id+' remains unresolved. Explain the evidence gaps and propose a different approach under current permissions. Do not repeat blocked actions, reset history or claim resolution.'))]}),
+        button('Ask Hermes to investigate',()=>continueChat('The selected Guardian incident remains unresolved. Explain the evidence gaps and propose a different approach under current permissions. Do not repeat blocked actions, reset history or claim resolution.',{intent:'investigate',incident:selected.id}))]}),
       canVerify && jsxs('section',{style:box,children:[heading('5. Verify the result'),paragraph(selected.retry_ok?'The corrective tool reported success. Check the intended outcome before closing.':'Advice is available, but success has not been established. Check Hermes’s subsequent work before closing.'),
         paragraph('Success criteria: '+(selected.criteria || selected.packet?.intended_outcome || 'Record the checked outcome below.')),
         field('What did you check, and what was the result? (no secrets)',verification,setVerification,true),
@@ -185,14 +227,14 @@ function Settings({ctx}) {
         button('Still unresolved',()=>{setVerified(false);act('unresolved')})]}),
       selected.state==='RESOLVED' && jsxs('section',{style:box,children:[heading('Incident closed'),paragraph('You confirmed the outcome after checking the result.'),fields({problem:selected.packet?.problem || REASONS[selected.reason],success_criteria:selected.criteria || selected.packet?.intended_outcome || 'User verified outcome',verification:selected.verification || 'User verified corrective result'})]}),
       related.length>0 && jsxs('section',{children:[heading('Expert reviews for this incident'),...related.map(reviewCard)]}),
-      details('Incident history and technical details',jsxs('div',{children:[jsx('ol',{children:[...(selected.transitions || []),...(selected.retry_finished?['Corrective attempt '+(selected.retry_ok?'reported success':'did not succeed')]:[]),...(selected.user_verified?['User verified outcome']:[])].map((event,index)=>jsx('li',{children:STATUS[event]?.[0] || readable(event)},index))}),fields(selected)]}))]}),
+      details('Incident history',jsxs('div',{children:[jsx('ol',{children:[...(selected.transitions || []),...(selected.retry_finished?['Corrective attempt '+(selected.retry_ok?'reported success':'did not succeed')]:[]),...(selected.user_verified?['User verified outcome']:[])].map((event,index)=>jsx('li',{children:STATUS[event]?.[0] || readable(event)},index))}),fields({status:currentStatus[0],detected:dated(selected.time),attempts:selected.attempts || 0,success_criteria:selected.criteria || selected.packet?.intended_outcome || 'Not yet defined'})]}))]}),
     loaded && details('Ask Expert · advice outside an incident',jsxs('div',{children:[paragraph('Use this for general task advice. These reviews do not close an incident.'),button('Request Expert advice',()=>act('request_review')),
-      jsxs('label',{children:['Select a review',jsx('select',{style:inputStyle,value:review,onChange:e=>setReview(e.target.value),children:[jsx('option',{value:'',children:'Choose a review'}),...standalone.map(r=>jsx('option',{value:r.id,children:status(r)[0]+' · '+r.id},r.id))]})]}),
+      jsxs('label',{children:['Select a review',jsx('select',{style:inputStyle,value:review,onChange:e=>setReview(e.target.value),children:[jsx('option',{value:'',children:'Choose a review'}),...standalone.map(r=>jsx('option',{value:r.id,children:status(r)[0]+' · '+dated(r.time)+' · Review '+(standalone.indexOf(r)+1)},r.id))]})]}),
       reviewCard(selectedReview),!standalone.length && paragraph('No general advice requests in this chat.')]})),
     details('Advanced settings and maintenance',jsxs('div',{children:[paragraph('Expert provider/model, local summary model, conversation rounds and sending policy are configured in Hermes Agent settings and auxiliary models.'),
       button('Run local safeguard simulations (no cloud)',()=>act('test'),!session.trim()),
-      button('Reset session and delete history',()=>{if(window.confirm('Delete this chat’s Guardian history and release its incident blocks? This is maintenance, not incident resolution.'))act('reset')},!session.trim()),
-      result && details('Last action technical result',jsx('pre',{style:{whiteSpace:'pre-wrap',overflowWrap:'anywhere'},children:JSON.stringify(result,null,2)}))]}))
+      button('Delete this chat’s Guardian history',()=>{if(window.confirm('Delete Guardian history for “'+selectedChatName+'” and release its incident blocks? This is maintenance, not incident resolution.'))act('reset')},!session.trim()),
+      result?.simulation_only && details('Safeguard check results',fields({result:result.passed?'Passed':'Needs attention',checks:Array.isArray(result.checks)?result.checks.map(check=>check.name+' — '+(check.passed?'Passed':'Failed')):[]}))]}))
   ]})
 }
 export default {

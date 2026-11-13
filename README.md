@@ -1,10 +1,12 @@
-# Hermes Expert Guardian 0.4.0
+# Hermes Expert Guardian 0.4.1
+
+**Readable names throughout:** chat selection uses Hermes chat titles and a searchable name picker. Duplicate names use dates and readable labels; unnamed chats use Untitled chat. Incident history, review choices and status messages omit backend IDs, hashes and raw records. Visible messages to Hermes use plain language; exact routing is carried in internal Guardian context.
 
 **Guided incident journey:** the current task chat loads automatically. Open an incident to see its readable status, next actor and relevant next action: review the problem → approve the summary → get advice → take action → verify the result → close. The page refreshes every five seconds. Related Expert reviews appear inside the incident; general advice and maintenance have their own expandable sections.
 
 **Verified closure:** advice received is not resolution. Advisory incidents remain visible as unverified until the user records a checked outcome and confirms closure. “Still unresolved” keeps the incident open and offers investigation without granting extra retries. Exact corrective recovery still requires approved evidence, one exact operation, native approval and a successful tool result before verification.
 
-See [the workflow and test evidence](docs/RELEASE-0.4.0.md). Built locally; this does not update an installed plugin or publish the release.
+See [the workflow and test evidence](docs/RELEASE-0.4.1.md). Built locally; this does not update an installed plugin or publish the release.
 
 **New: bounded Expert conversations.** Enable `expert_conversations` in Agent settings for locally anonymised follow-ups within a review. Set `conversation_max_rounds` (1–6, default 3 including the first reply) and `conversation_approve_each_round` (default on). Every outbound round and its retained conversation history pass the privacy boundary. See [conversation settings](docs/REVIEWS.md).
 
@@ -47,7 +49,7 @@ For an installed SDK compatibility probe, use its Python with `tests/runtime_pro
 
 Manifest-generated controls include monitoring thresholds, Expert enablement, timeout and [new review settings](docs/REVIEWS.md). Legacy recovery retains one consultation and one exact corrective attempt per incident. New advisory reviews use a session budget and selectable preview/automatic sending. Expert selection uses Hermes auxiliary-model settings.
 
-The Desktop page provides incident history, packet preview, send approval/denial, recovery authorization, explicit success verification, and reset/history deletion for a session. The focused durable session is loaded initially; Use focused chat and an advanced session override allow deliberate session selection. An API objective action exists for integrations, but there is no objective control on the current page. Run local safeguard simulations (no cloud) executes 42 bounded engine checks in the Hermes frontend. These simulations do not replace the complete development suite or live native approval acceptance. The first approved consultation is the live connection check.
+The Desktop page provides incident history, packet preview, send approval/denial, recovery authorization, explicit success verification, and reset/history deletion for a session. The focused durable session is loaded initially; Use focused chat and a chat-name picker allow deliberate session selection. An API objective action exists for integrations, but there is no objective control on the current page. Run local safeguard simulations (no cloud) executes 42 bounded engine checks in the Hermes frontend. These simulations do not replace the complete development suite or live native approval acceptance. The first approved consultation is the live connection check.
 
 ## Rollback and uninstall
 

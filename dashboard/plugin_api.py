@@ -33,6 +33,9 @@ def action(body: dict):
             raise ValueError("Session required")
         kind = body["action"]
         identity = body.get("incident", "")
+        if kind == "handoff":
+            service.handoff(session, body["intent"], body.get("review_id") or identity)
+            return {"ok": True}
         if kind == "request_review":
             from importlib import import_module
             return import_module(name + ".review").Reviews(service).request(session)

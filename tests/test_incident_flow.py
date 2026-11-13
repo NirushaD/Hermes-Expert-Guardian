@@ -90,3 +90,32 @@ class IncidentFlowTests(unittest.TestCase):
             self.assertEqual(data['events'], before)
         self.assertEqual(self.g.view('s')['incidents'][-1]['state'], 'BLOCK_RETRIES')
         self.assertEqual(self.g.pre('terminal', {'command':'public-check'}, session_id='s')['action'], 'block')
+
+    def test_handoff_uses_exact_review_once_without_new_consultation(self):
+        item = self.reviewed()
+        review_id = item['review_id']
+        self.g.handoff('s', 'continue_review', review_id)
+        context = self.g.context(session_id='s')['context']
+        self.assertIn(review_id, context)
+        self.assertIn('internal routing only', context)
+        self.assertIn('continue_review', context)
+        self.assertNotIn('Guardian selected action', (self.g.context(session_id='s') or {}).get('context',''))
+        self.assertEqual(len(self.g.view('s')['reviews']), 1)
+
+    def test_handoff_refuses_wrong_state_unknown_intent_and_other_session(self):
+        item = self.loop()
+        for session, intent, identity in [('s','execute_action',item['id']),('other','investigate',item['id']),('s','unknown',item['id'])]:
+            with self.subTest(intent=intent), self.assertRaises((ValueError,StopIteration)):
+                self.g.handoff(session,intent,identity)
+        with self.store.session('s') as data:
+            self.assertNotIn('ui_handoff',data)
+        self.g.handoff('s','investigate',item['id'])
+        self.assertIn(item['id'],self.g.context(session_id='s')['context'])
+
+    def test_pause_message_has_no_backend_identifiers_or_state_codes(self):
+        item = self.loop()
+        message=self.g.pre('terminal',{'command':'public-check'},session_id='s')['message']
+        self.assertIn('Repeated failures',message)
+        self.assertNotIn(item['id'],message)
+        self.assertNotIn('BLOCK_RETRIES',message)
+        self.assertNotIn('identical_failure',message)
