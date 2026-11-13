@@ -22,6 +22,11 @@ def incident(session: str):
     return integration.create().view(session)
 
 
+@router.get("/incidents")
+def incidents():
+    return {"sessions": integration.create().store.incident_index()}
+
+
 @router.post("/action")
 def action(body: dict):
     try:

@@ -1,0 +1,42 @@
+{
+  "skill_name": "hermes-expert-guardian",
+  "source": "https://github.com/NirushaD/Hermes-Expert-Guardian/tree/main/release/hermes-expert-guardian",
+  "trust_level": "community",
+  "verdict": "safe",
+  "findings": [
+    {
+      "pattern_id": "hardcoded_ip_port",
+      "severity": "low",
+      "category": "network",
+      "file": "guardian/review.py",
+      "line": 73,
+      "match": "endpoint = config(\"local_summary_url\", \"http://127.0.0.1:1234/v1/chat/completions\")",
+      "description": "hardcoded IP address with port"
+    },
+    {
+      "pattern_id": "hardcoded_ip_port",
+      "severity": "low",
+      "category": "network",
+      "file": "plugin.yaml",
+      "line": 19,
+      "match": "local_summary_url: {type: str, default: \"http://127.0.0.1:1234/v1/chat/completions\", description: \"Local-only OpenAI-...",
+      "description": "hardcoded IP address with port"
+    },
+    {
+      "pattern_id": "hardcoded_ip_port",
+      "severity": "low",
+      "category": "network",
+      "file": "README.md",
+      "line": 26,
+      "match": "Enable the agent and Desktop halves for the correct profile. Enable `expert_enabled`, select Expert in Hermes auxilia...",
+      "description": "hardcoded IP address with port"
+    }
+  ],
+  "scanned_at": "2026-11-13T03:44:58.284941+00:00",
+  "summary": "hermes-expert-guardian: safe \u2014 3 finding(s) in network",
+  "scan_provenance": {
+    "scanner_version": "plugin-guard-v11",
+    "verdict": "safe",
+    "source": "https://github.com/NirushaD/Hermes-Expert-Guardian/tree/main/release/hermes-expert-guardian"
+  }
+}

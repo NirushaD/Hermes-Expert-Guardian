@@ -33,6 +33,10 @@ function Settings({ctx}) {
   const [chatSnapshot,setChatSnapshot] = useState(null)
   const [chatError,setChatError] = useState('')
   const [chatSearch,setChatSearch] = useState('')
+  const [expandedChats,setExpandedChats] = useState(focusedChat ? [focusedChat] : [])
+  const pendingIncident = useRef(null)
+  const currentIncident = useRef('')
+  const viewport = useValue(host.state.viewport)
   const chatVersion = useRef(0)
   const currentProfile = useRef(profile)
   currentProfile.current=profile
@@ -46,10 +50,11 @@ function Settings({ctx}) {
   const loadChats = async () => {
     const target=profile, version=++chatVersion.current
     try {
-      const data=await host.request('session.list',{profile:target,limit:1000})
+      const [data,index]=await Promise.all([host.request('session.list',{profile:target,limit:1000}),ctx.rest('/incidents')])
       if(target!==currentProfile.current || version!==chatVersion.current)return
       if(!Array.isArray(data?.sessions))throw Error('Invalid chat list')
-      setChatSnapshot({profile:target,chats:data.sessions.filter(row=>typeof row.id==='string' && row.id)})
+      if(!Array.isArray(index?.sessions))throw Error('Invalid incident list')
+      setChatSnapshot({profile:target,chats:data.sessions.filter(row=>typeof row.id==='string' && row.id),index:index.sessions})
       setChatError('')
     } catch {
       if(target===currentProfile.current && version===chatVersion.current){setChatSnapshot(null);setChatError('Chat names could not be loaded. Open the task chat and use focused chat, or reload the chat list.')}
@@ -57,6 +62,7 @@ function Settings({ctx}) {
   }
   const [snapshot,setSnapshot] = useState(null)
   const [incident,setIncident] = useState('')
+  currentIncident.current=incident
   const [review,setReview] = useState('')
   const [description,setDescription] = useState('')
   const [outcome,setOutcome] = useState('')
@@ -82,7 +88,26 @@ function Settings({ctx}) {
   const selectedReview = reviews.find(r=>r.id===review && !r.incident)
   const isLive = target => currentSession.current===target && currentProfile.current===profile
   const clearForm = () => {setDescription('');setOutcome('');setTool('terminal');setArgumentsText('');setVerified(false);setVerification('');setEvidenceReviewed(false)}
-  const chooseIncident = id => {setIncident(id);setReview('');clearForm();setMessage('');setError('')}
+  const chooseIncident = (id,target=session) => {
+    pendingIncident.current={session:target,id}
+    currentIncident.current=id
+    setSession(target);setIncident(id);setSnapshot(null);setReview('');clearForm();setMessage('');setError('')
+    if(target===session)refresh()
+  }
+  const chatKeys = row => [row.id,row._lineage_root_id,row.resolved_id].filter(Boolean)
+  const toggleChat = row => setExpandedChats(previous=>chatKeys(row).some(key=>previous.includes(key))?previous.filter(key=>!chatKeys(row).includes(key)):[...previous,row.id])
+  const treeKey = (event,row,child=false) => {
+    const nodes=[...event.currentTarget.closest('[role=tree]').querySelectorAll('button[role=treeitem]')]
+    const at=nodes.indexOf(event.currentTarget)
+    if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){
+      event.preventDefault();nodes[event.key==='Home'?0:event.key==='End'?nodes.length-1:Math.max(0,Math.min(nodes.length-1,at+(event.key==='ArrowDown'?1:-1)))]?.focus()
+    } else if(event.key==='ArrowRight' && !child && !chatKeys(row).some(key=>expandedChats.includes(key))){event.preventDefault();toggleChat(row)}
+    else if(event.key==='ArrowLeft'){
+      event.preventDefault()
+      if(child)nodes.find(node=>node.value===row.id)?.focus()
+      else if(chatKeys(row).some(key=>expandedChats.includes(key)))toggleChat(row)
+    }
+  }
   const refresh = async (quiet=false) => {
     const target=session.trim(), version=++requestVersion.current
     if(!target){setError('Choose the chat containing your task first.');return}
@@ -93,23 +118,19 @@ function Settings({ctx}) {
       const items=Array.isArray(data.incidents)?data.incidents:[]
       const advice=Array.isArray(data.reviews)?data.reviews:[]
       setSnapshot({...data,session:target,profile,incidents:items,reviews:advice})
-      if(!items.some(i=>i.id===incident)) {
-        const open=items.filter(i=>i.state!=='RESOLVED')
-        setIncident(open.length===1?open[0].id:items.length===1?items[0].id:'')
-        clearForm()
-      }
+      if(!items.some(i=>i.id===currentIncident.current)) {setIncident('');clearForm()}
       if(!advice.some(r=>r.id===review)) {
         const pending=advice.filter(r=>r.state==='AWAIT_SEND' && !r.incident)
         setReview(pending.length===1?pending[0].id:'')
       }
       setError(Array.isArray(data.reviews)?'':'This backend does not expose advisory reviews. Restart Hermes to load the updated plugin backend.')
     } catch {
-      if(isLive(target) && version===requestVersion.current){setSnapshot(null);setError('Could not load this chat. Check the session and connection, then reload.')}
+      if(isLive(target) && version===requestVersion.current){setSnapshot(null);setError('Could not load this incident. Refresh the tree and select it again.')}
     } finally {if(!quiet)setBusy(false)}
   }
-  useEffect(()=>{setChatSnapshot(null);setSession(focusedChat || '');loadChats()},[profile])
+  useEffect(()=>{setChatSnapshot(null);setExpandedChats(focusedChat?[focusedChat]:[]);setSession(focusedChat || '');loadChats()},[profile])
   useEffect(()=>{loadChats()},[activeSession])
-  useEffect(()=>{setSnapshot(null);setIncident('');setReview('');clearForm();setMessage('');setError('');refresh()},[session,profile])
+  useEffect(()=>{setSnapshot(null);if(pendingIncident.current?.session!==session)setIncident('');pendingIncident.current=null;setReview('');clearForm();setMessage('');setError('');refresh()},[session,profile])
   useEffect(()=>{
     const timer=setInterval(()=>{if(!busy){if(session.trim())refresh(true);loadChats()}},5000)
     return ()=>clearInterval(timer)
@@ -140,7 +161,7 @@ function Settings({ctx}) {
       if(action==='authorize')await submit(target,'The selected Guardian incident has one corrective attempt authorized: '+JSON.stringify({tool:extra.tool,args:extra.args})+'. Success criteria: '+extra.criteria+'. Perform only this exact operation under native approval, then report the result. Do not claim resolution until user verification.',{intent:'execute_action',incident:identity})
       if(action==='reset'){setSnapshot(null);setIncident('');setReview('');clearForm()}
       else {setVerified(false);setEvidenceReviewed(false)}
-      if(action!=='test')await refresh(true)
+      if(action!=='test')await Promise.all([refresh(true),loadChats()])
       setMessage(previous=>previous || (action==='resolve'?'Incident closed after your verification.':action==='test'?(data.passed?'Local safeguard checks passed. No cloud requests or real tools.':'Some safeguard checks failed. Open safeguard check results.'):'Step saved. The current status and next action are shown below.'))
       return true
     } catch {
@@ -173,28 +194,39 @@ function Settings({ctx}) {
     details('Review summary',fields({status:status(item)[0],requested:dated(item.time),round:item.round || 1}))]},item.id)
   const currentStatus=status(selected)
   const canVerify=selected && selected.state!=='RESOLVED' && (selected.retry_ok || selected.state==='REVIEWED')
-  return jsxs('main',{style:{padding:20,maxWidth:920,margin:'0 auto',lineHeight:1.5},children:[
-    jsx('h2',{children:'Expert Guardian · Incidents'}),paragraph('Track the problem, review advice, take action and verify the outcome.'),
-    jsxs('section',{style:box,children:[heading('Task chat'),paragraph(session?'Selected chat: '+selectedChatName:'Open the chat containing your task, then use focused chat.'),
-      chatError && jsx('p',{role:'alert',children:chatError}),
-      button('Use focused chat',()=>{setSession(focusedChat || '');loadChats()},!focusedChat),button('Reload incidents and reviews',async()=>{await Promise.all([refresh(),loadChats()])},!session.trim()),
-      details('Choose another chat',jsxs('div',{children:[field('Find a chat by name',chatSearch,setChatSearch),
-        jsxs('label',{children:['Chat name',jsx('select',{style:inputStyle,value:session,onChange:e=>{setSession(e.target.value);clearForm()},children:[jsx('option',{value:'',children:'Choose a chat'}),
-          session && !chats.some(row=>row.id===session) && jsx('option',{value:session,children:selectedChatName}),
-          ...chats.filter(row=>row.id===session || optionName(row).toLowerCase().includes(chatSearch.toLowerCase())).map(row=>jsx('option',{value:row.id,children:optionName(row)},row.id))]})]}),
-        button('Reload chat names',loadChats)]})),
-      loaded && paragraph(loaded.mode==='enforce'?'Enforce mode: Guardian blocks repeated operations until an allowed next step.':'Monitor mode: incidents are recorded; Guardian does not block operations.')]}),
-    error && jsx('p',{role:'alert',style:box,children:error}),message && jsx('p',{role:'status',style:box,children:message}),
-    busy && paragraph('Loading or processing…'),
-    loaded && jsxs('section',{style:box,children:[heading('Incidents in “'+selectedChatName+'”'),
-      !incidents.length && paragraph('No incidents recorded. You can still ask Expert for advice below.'),
-      ...[...incidents].sort((a,b)=>(a.state==='RESOLVED')-(b.state==='RESOLVED') || (b.time || 0)-(a.time || 0)).map(i=>jsxs('article',{style:{padding:'10px 0',borderBottom:'1px solid #727b8840'},children:[
-        jsx('strong',{children:REASONS[i.reason] || readable(i.reason || 'Incident')}),paragraph(status(i)[0]+' · Next: '+status(i)[1]+(i.time?' · '+new Date(i.time*1000).toLocaleString():'')),
-        button(i.id===incident?'Viewing incident':'Open incident',()=>chooseIncident(i.id))]},i.id))]}),
+  const treeRows=chats.length?chats:(focusedChat?[{id:focusedChat,title:'Current chat'}]:[])
+  const treeIndex=chatSnapshot?.profile===profile?chatSnapshot.index || []:[]
+  const incidentRows = row => {
+    const cached=treeIndex.filter(entry=>chatKeys(row).includes(entry.session))
+    if(loaded && chatKeys(row).includes(session) && !cached.some(entry=>entry.session===session))cached.push({session,incidents})
+    const items=cached.flatMap(entry=>(entry.session===session && loaded?incidents:entry.incidents).map(item=>({...item,owner:entry.session})))
+    return [...items].sort((a,b)=>(a.state==='RESOLVED')-(b.state==='RESOLVED') || (b.time || 0)-(a.time || 0))
+  }
+  return jsxs('main',{style:{padding:20,maxWidth:1440,margin:'0 auto',lineHeight:1.5},children:[
+    jsx('h2',{children:'Expert Guardian'}),paragraph('Choose a chat and incident on the left. Follow the steps on the right.'),
+    jsxs('div',{'aria-label':'Incident workspace',style:{display:'grid',gridTemplateColumns:viewport?.narrow?'minmax(0, 1fr)':'minmax(260px, 32%) minmax(0, 1fr)',gap:24,alignItems:'start'},children:[
+      jsxs('aside',{'aria-label':'Chats and incidents',style:{...box,margin:0,position:viewport?.narrow?'static':'sticky',top:12,maxHeight:viewport?.narrow?360:'75vh',overflowY:'auto',minWidth:0},children:[
+        heading('Chats and incidents'),field('Find a chat by name',chatSearch,setChatSearch),
+        button('Refresh tree',loadChats),button('Use focused chat',()=>{if(focusedChat){setExpandedChats(previous=>previous.includes(focusedChat)?previous:[...previous,focusedChat]);chooseIncident('',focusedChat);loadChats()}},!focusedChat),
+        chatError && jsx('p',{role:'alert',children:chatError}),
+        !treeRows.length && paragraph('No chats available. Open a task chat, then refresh the tree.'),
+        jsx('ul',{role:'tree','aria-label':'Chat incident tree',style:{listStyle:'none',padding:0,margin:0},children:treeRows.filter(row=>row.id===session || optionName(row).toLowerCase().includes(chatSearch.toLowerCase())).map(row=>{
+          const items=incidentRows(row), expanded=chatKeys(row).some(key=>expandedChats.includes(key))
+          return jsxs('li',{role:'none',style:{margin:'8px 0'},children:[
+            jsx('button',{type:'button',role:'treeitem',value:row.id,'aria-expanded':expanded,'aria-label':optionName(row),onClick:()=>toggleChat(row),onKeyDown:event=>treeKey(event,row),style:{...inputStyle,textAlign:'left',fontWeight:600,overflowWrap:'anywhere',cursor:'pointer',margin:0},children:(expanded?'▾ ':'▸ ')+optionName(row)+' ('+items.length+')'}),
+            expanded && jsx('ul',{role:'group',style:{listStyle:'none',padding:'4px 0 4px 16px'},children:items.length?items.map((item,index)=>jsx('li',{role:'none',children:jsxs('button',{type:'button',role:'treeitem',value:item.id,'aria-selected':session===item.owner && incident===item.id,'aria-label':(REASONS[item.reason] || 'Incident')+' · '+dated(item.time)+' · Incident '+(index+1),onClick:()=>chooseIncident(item.id,item.owner),onKeyDown:event=>treeKey(event,row,true),style:{...inputStyle,textAlign:'left',cursor:'pointer',margin:'6px 0',borderWidth:session===item.owner && incident===item.id?2:1,fontWeight:session===item.owner && incident===item.id?600:400},children:[jsx('span',{style:{display:'block'},children:REASONS[item.reason] || 'Incident'}),jsx('small',{style:{display:'block'},children:(session===item.owner && incident===item.id?'Selected · ':'')+status(item)[0]}),jsx('small',{style:{display:'block'},children:dated(item.time)})]})},item.owner+':'+item.id)):jsx('li',{children:paragraph(chatSnapshot?'No incidents recorded.':'Loading incidents…')})})
+          ]},row.id)
+        })})
+      ]}),
+      jsxs('section',{'aria-label':'Selected incident',style:{minWidth:0},children:[
+        error && jsx('p',{role:'alert',style:box,children:error}),message && jsx('p',{role:'status',style:box,children:message}),
+        busy && paragraph('Loading or processing…'),
+        !selected && jsxs('section',{style:box,children:[heading('Select an incident'),paragraph('Expand a chat on the left, then choose an incident to see its details and next step. No action is taken when you select an incident.')]}),
     selected && jsxs('section',{'aria-label':'Incident journey',children:[
-      heading(REASONS[selected.reason] || readable(selected.reason || 'Incident')),
-      jsx('ol',{'aria-label':'Incident progress',style:{display:'flex',flexWrap:'wrap',gap:24,paddingLeft:24},children:STEPS.map((step,index)=>jsx('li',{'aria-current':index===currentStatus[2]?'step':undefined,style:{fontWeight:index===currentStatus[2]?700:400},children:step},step))}),
-      jsxs('section',{style:box,children:[heading(currentStatus[0]),paragraph('Next actor: '+currentStatus[1]+'.'),paragraph('Observed '+(selected.attempts || 0)+' failed or repeated attempts. '+(selected.packet?.problem || 'Guardian detected a repeated pattern; the cause still needs review.'))]}),
+      paragraph('Chat: '+selectedChatName),heading(REASONS[selected.reason] || 'Incident'),paragraph('Detected: '+dated(selected.time)),
+      button('Reload incident',()=>refresh()),
+      jsx('ol',{'aria-label':'Incident progress',style:{display:'grid',gridTemplateColumns:'repeat(3, minmax(0, 1fr))',gap:8,padding:0,listStyle:'none'},children:STEPS.map((step,index)=>jsx('li',{'aria-current':index===currentStatus[2]?'step':undefined,style:{fontWeight:index===currentStatus[2]?700:400,padding:8,border:'1px solid currentColor',borderRadius:5},children:(index+1)+'. '+step},step))}),
+      jsxs('section',{style:box,children:[heading('Step '+(currentStatus[2]+1)+' of '+STEPS.length+' · '+currentStatus[0]),paragraph('Who acts next: '+currentStatus[1]+'.'),paragraph('Observed '+(selected.attempts || 0)+' failed or repeated attempts. '+(selected.packet?.problem || 'Guardian detected a repeated pattern; the cause still needs review.'))]}),
       selected.state==='BLOCK_RETRIES' && jsxs('section',{style:box,children:[heading('1. Review the problem'),paragraph('Describe the problem and what a successful result looks like. Keep secrets and identifying details out of these fields.'),
         field('Problem to review',description,setDescription,true),field('What should success look like?',outcome,setOutcome,true),
         button('Prepare Expert review',()=>act('prepare',{description:description.trim(),outcome:outcome.trim()}),!description.trim() || !outcome.trim())]}),
@@ -228,6 +260,9 @@ function Settings({ctx}) {
       selected.state==='RESOLVED' && jsxs('section',{style:box,children:[heading('Incident closed'),paragraph('You confirmed the outcome after checking the result.'),fields({problem:selected.packet?.problem || REASONS[selected.reason],success_criteria:selected.criteria || selected.packet?.intended_outcome || 'User verified outcome',verification:selected.verification || 'User verified corrective result'})]}),
       related.length>0 && jsxs('section',{children:[heading('Expert reviews for this incident'),...related.map(reviewCard)]}),
       details('Incident history',jsxs('div',{children:[jsx('ol',{children:[...(selected.transitions || []),...(selected.retry_finished?['Corrective attempt '+(selected.retry_ok?'reported success':'did not succeed')]:[]),...(selected.user_verified?['User verified outcome']:[])].map((event,index)=>jsx('li',{children:STATUS[event]?.[0] || readable(event)},index))}),fields({status:currentStatus[0],detected:dated(selected.time),attempts:selected.attempts || 0,success_criteria:selected.criteria || selected.packet?.intended_outcome || 'Not yet defined'})]}))]}),
+      ]})
+    ]}),
+    details('Other Guardian tools',jsxs('div',{children:[
     loaded && details('Ask Expert · advice outside an incident',jsxs('div',{children:[paragraph('Use this for general task advice. These reviews do not close an incident.'),button('Request Expert advice',()=>act('request_review')),
       jsxs('label',{children:['Select a review',jsx('select',{style:inputStyle,value:review,onChange:e=>setReview(e.target.value),children:[jsx('option',{value:'',children:'Choose a review'}),...standalone.map(r=>jsx('option',{value:r.id,children:status(r)[0]+' · '+dated(r.time)+' · Review '+(standalone.indexOf(r)+1)},r.id))]})]}),
       reviewCard(selectedReview),!standalone.length && paragraph('No general advice requests in this chat.')]})),
@@ -235,6 +270,7 @@ function Settings({ctx}) {
       button('Run local safeguard simulations (no cloud)',()=>act('test'),!session.trim()),
       button('Delete this chat’s Guardian history',()=>{if(window.confirm('Delete Guardian history for “'+selectedChatName+'” and release its incident blocks? This is maintenance, not incident resolution.'))act('reset')},!session.trim()),
       result?.simulation_only && details('Safeguard check results',fields({result:result.passed?'Passed':'Needs attention',checks:Array.isArray(result.checks)?result.checks.map(check=>check.name+' — '+(check.passed?'Passed':'Failed')):[]}))]}))
+    ]}))
   ]})
 }
 export default {
