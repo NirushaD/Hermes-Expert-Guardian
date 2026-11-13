@@ -65,6 +65,10 @@ def action(body: dict):
             service.authorize(session, identity, body["tool"], body["args"], body["criteria"])
         elif kind == "resolve":
             service.resolve(session, identity, body.get("verification", ""))
+        elif kind == "dismiss":
+            if body.get("confirmed") is not True:
+                raise ValueError("Confirm closing without review")
+            service.dismiss(session, identity, body["reason"])
         elif kind == "unresolved":
             service.unresolved(session, identity)
         elif kind == "reset":
@@ -73,7 +77,7 @@ def action(body: dict):
             from importlib import import_module
             import_module(name + ".privacy").safe_text(body["objective"])
             with service.store.session(session) as data:
-                if any(i["state"] != "RESOLVED" for i in data["incidents"]):
+                if any(i["state"] not in {"RESOLVED", "DISMISSED"} for i in data["incidents"]):
                     raise ValueError("Reset unresolved incident explicitly before changing objective")
                 data["objective"] = body["objective"]
         elif kind == "deny":

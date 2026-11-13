@@ -144,3 +144,72 @@ class IncidentFlowTests(unittest.TestCase):
         indexed={entry['session']:entry['incidents'] for entry in self.store.incident_index()}
         self.assertEqual(indexed['s'][0]['state'],'RESOLVED')
         self.assertEqual(indexed['other'][0]['state'],'BLOCK_RETRIES')
+
+    def test_dismiss_without_review_releases_own_block_and_preserves_history(self):
+        item=self.loop()
+        self.g.dismiss('s',item['id'],'Not relevant for review')
+        closed=self.g.view('s')['incidents'][0]
+        self.assertEqual(closed['state'],'DISMISSED')
+        self.assertFalse(closed['user_verified'])
+        self.assertFalse(closed['action_approved'])
+        self.assertEqual(closed['dismissal_reason'],'Not relevant for review')
+        self.assertEqual(self.g.llm.calls,[])
+        self.assertIsNone(self.g.pre('terminal',{'command':'public-check'},session_id='s'))
+        self.loop()
+        self.assertEqual(len(self.g.view('s')['incidents']),2,'New failures remain monitored')
+
+    def test_dismiss_requires_reason_and_does_not_allow_false_resolution(self):
+        item=self.loop()
+        for reason in ['', 'password=example','x'*801]:
+            with self.assertRaises(ValueError):self.g.dismiss('s',item['id'],reason)
+        with self.assertRaises(StopIteration):self.g.dismiss('other',item['id'],'Not relevant')
+        self.assertEqual(self.g.view('s')['incidents'][0]['state'],'BLOCK_RETRIES')
+        self.g.dismiss('s',item['id'],'No longer relevant')
+        for method, arguments in [(self.g.resolve,('s',item['id'],'Claimed success')),(self.g.unresolved,('s',item['id'])),(self.g.dismiss,('s',item['id'],'Again'))]:
+            with self.assertRaises(ValueError):method(*arguments)
+
+    def test_dismiss_cancels_linked_reviews_and_pending_handoff(self):
+        item=self.reviewed()
+        self.g.handoff('s','continue_review',item['review_id'])
+        self.g.dismiss('s',item['id'],'Advice no longer needed')
+        view=self.g.view('s')
+        self.assertEqual(view['reviews'][0]['state'],'CANCELLED')
+        with self.store.session('s') as data:self.assertNotIn('ui_handoff',data)
+        with self.assertRaises(ValueError):self.g.handoff('s','continue_review',item['review_id'])
+
+    def test_dismiss_older_incident_preserves_newer_loop_block(self):
+        older=self.reviewed();newer=self.loop()
+        with self.store.session('s') as data:before=list(data['events'])
+        self.g.dismiss('s',older['id'],'Old incident not relevant')
+        with self.store.session('s') as data:self.assertEqual(data['events'],before)
+        self.assertEqual(self.g.pre('terminal',{'command':'public-check'},session_id='s')['action'],'block')
+        self.assertEqual(self.g.view('s')['incidents'][-1]['id'],newer['id'])
+
+    def test_dismiss_revokes_unconsumed_attempt_but_waits_for_inflight_result(self):
+        for consume in [False,True]:
+            with self.subTest(consume=consume):
+                self.store.delete('s')
+                item=self.loop();self.g.prepare('s',item['id'],'Public problem','Expected outcome')
+                packet=self.g.view('s')['incidents'][0]
+                self.g.send('s',item['id'],packet['packet_hash'])
+                self.g.authorize('s',item['id'],'terminal',{'command':'public-fix'},'Expected outcome')
+                if consume:
+                    self.g.pre('terminal',{'command':'public-fix'},session_id='s',tool_call_id='one')
+                    with self.assertRaises(ValueError):self.g.dismiss('s',item['id'],'No longer relevant')
+                    self.g.post('terminal',{'command':'public-fix'},session_id='s',tool_call_id='one',status='cancelled')
+                self.g.dismiss('s',item['id'],'No longer relevant')
+                self.assertFalse(self.g.view('s')['incidents'][0]['action_approved'])
+                self.assertIsNone(self.g.pre('terminal',{'command':'public-fix'},session_id='s'))
+
+    def test_late_consultation_cannot_reopen_dismissed_incident(self):
+        from unittest.mock import patch
+        from tests.test_guardian import ADVICE
+        item=self.loop();self.g.prepare('s',item['id'],'Public problem','Expected outcome')
+        packet=self.g.view('s')['incidents'][0]
+        def late(*args):
+            self.g.dismiss('s',item['id'],'No longer relevant')
+            return ADVICE
+        with patch('guardian.expert.consult',side_effect=late):
+            self.assertEqual(self.g.send('s',item['id'],packet['packet_hash']),'DISMISSED')
+        self.assertEqual(self.g.view('s')['incidents'][0]['state'],'DISMISSED')
+        self.assertNotIn('advice',self.g.view('s')['incidents'][0])

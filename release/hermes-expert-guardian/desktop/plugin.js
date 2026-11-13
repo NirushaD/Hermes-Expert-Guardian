@@ -8,15 +8,16 @@ const STATUS = {
   EXPERT_CONSULTATION:['Getting Expert advice','Expert',2], PROPOSED_FIX:['Review the proposed action','You',3],
   SINGLE_RETRY:['Ready for one corrective attempt','Hermes',3], AWAIT_ACTION_APPROVAL:['Corrective attempt awaiting result','Hermes / you',3],
   ESCALATE_TO_USER:['Needs your attention','You',3], REVIEWED:['Advice received — outcome not verified','Hermes / you',4],
-  RESOLVED:['Resolved','Complete',5], AWAIT_SEND:['Approve the summary','You',1],
+  DISMISSED:['Closed without review','Complete',5], RESOLVED:['Resolved','Complete',5], AWAIT_SEND:['Approve the summary','You',1],
   REQUESTED:['Waiting for Hermes to prepare a summary','Hermes',0], PREPARING:['Preparing an anonymous summary','Hermes',0],
   SENDING:['Getting Expert advice','Expert',2], ADVICE_READY:['Advice ready','Hermes / you',3], FAILED:['Review failed','You',2], CANCELLED:['Review cancelled','You',0]
 }
+const CLOSED = new Set(['RESOLVED','DISMISSED'])
 const STEPS = ['Review problem','Approve summary','Get advice','Take action','Verify result','Closed']
 const box = {border:'1px solid #727b8880',borderRadius:8,padding:16,margin:'14px 0'}
 const inputStyle = {display:'block',boxSizing:'border-box',width:'100%',padding:9,marginTop:5,border:'1px solid #727b88',borderRadius:5,background:'transparent',color:'inherit'}
 const readable = key => key.replaceAll('_',' ').replace(/^./,c=>c.toUpperCase())
-const status = item => item?.outcome_unresolved && item.state!=='RESOLVED' ? ['Outcome still unresolved','You',4] : item?.retry_ok && item.state!=='RESOLVED' ? ['Verify the result','You',4] : STATUS[item?.state] || ['Unknown status — reload before acting','You',0]
+const status = item => item?.outcome_unresolved && !CLOSED.has(item.state) ? ['Outcome still unresolved','You',4] : item?.retry_ok && !CLOSED.has(item.state) ? ['Verify the result','You',4] : STATUS[item?.state] || ['Unknown status — reload before acting','You',0]
 const chatName = row => [row?.title,row?.preview].find(value=>typeof value==='string' && value.trim() && ![row?.id,row?._lineage_root_id,row?.resolved_id].includes(value.trim()))?.trim() || 'Untitled chat'
 const dated = value => value ? new Date(value*1000).toLocaleString() : 'Date unavailable'
 const heading = text => jsx('h3',{children:text})
@@ -64,6 +65,8 @@ function Settings({ctx}) {
   const [incident,setIncident] = useState('')
   currentIncident.current=incident
   const [review,setReview] = useState('')
+  const [dismissOpen,setDismissOpen] = useState(false)
+  const [dismissReason,setDismissReason] = useState('Not relevant for review')
   const [description,setDescription] = useState('')
   const [outcome,setOutcome] = useState('')
   const [tool,setTool] = useState('terminal')
@@ -87,7 +90,7 @@ function Settings({ctx}) {
   const related = reviews.filter(r=>r.incident===incident)
   const selectedReview = reviews.find(r=>r.id===review && !r.incident)
   const isLive = target => currentSession.current===target && currentProfile.current===profile
-  const clearForm = () => {setDescription('');setOutcome('');setTool('terminal');setArgumentsText('');setVerified(false);setVerification('');setEvidenceReviewed(false)}
+  const clearForm = () => {setDismissOpen(false);setDismissReason('Not relevant for review');setDescription('');setOutcome('');setTool('terminal');setArgumentsText('');setVerified(false);setVerification('');setEvidenceReviewed(false)}
   const chooseIncident = (id,target=session) => {
     pendingIncident.current={session:target,id}
     currentIncident.current=id
@@ -160,9 +163,9 @@ function Settings({ctx}) {
       if(action==='send_review' && data.state==='ADVICE_READY')await submit(target,'Continue the selected Expert review for this chat. Assess its advice against local evidence and continue under normal approvals. Verify the outcome before claiming resolution.',{intent:'continue_review',review_id:extra.review_id})
       if(action==='authorize')await submit(target,'The selected Guardian incident has one corrective attempt authorized: '+JSON.stringify({tool:extra.tool,args:extra.args})+'. Success criteria: '+extra.criteria+'. Perform only this exact operation under native approval, then report the result. Do not claim resolution until user verification.',{intent:'execute_action',incident:identity})
       if(action==='reset'){setSnapshot(null);setIncident('');setReview('');clearForm()}
-      else {setVerified(false);setEvidenceReviewed(false)}
+      else {setVerified(false);setEvidenceReviewed(false);setDismissOpen(false)}
       if(action!=='test')await Promise.all([refresh(true),loadChats()])
-      setMessage(previous=>previous || (action==='resolve'?'Incident closed after your verification.':action==='test'?(data.passed?'Local safeguard checks passed. No cloud requests or real tools.':'Some safeguard checks failed. Open safeguard check results.'):'Step saved. The current status and next action are shown below.'))
+      setMessage(previous=>previous || (action==='dismiss'?'Incident closed without review. Closing it did not authorize or verify a correction.':action==='resolve'?'Incident closed after your verification.':action==='test'?(data.passed?'Local safeguard checks passed. No cloud requests or real tools.':'Some safeguard checks failed. Open safeguard check results.'):'Step saved. The current status and next action are shown below.'))
       return true
     } catch {
       if(isLive(target)){
@@ -193,16 +196,16 @@ function Settings({ctx}) {
     !['CANCELLED','ADVICE_READY'].includes(item.state) && button('Cancel this review',()=>act('cancel_review',{review_id:item.id})),
     details('Review summary',fields({status:status(item)[0],requested:dated(item.time),round:item.round || 1}))]},item.id)
   const currentStatus=status(selected)
-  const canVerify=selected && selected.state!=='RESOLVED' && (selected.retry_ok || selected.state==='REVIEWED')
+  const canVerify=selected && !CLOSED.has(selected.state) && (selected.retry_ok || selected.state==='REVIEWED')
   const treeRows=chats.length?chats:(focusedChat?[{id:focusedChat,title:'Current chat'}]:[])
   const treeIndex=chatSnapshot?.profile===profile?chatSnapshot.index || []:[]
   const incidentRows = row => {
     const cached=treeIndex.filter(entry=>chatKeys(row).includes(entry.session))
     if(loaded && chatKeys(row).includes(session) && !cached.some(entry=>entry.session===session))cached.push({session,incidents})
     const items=cached.flatMap(entry=>(entry.session===session && loaded?incidents:entry.incidents).map(item=>({...item,owner:entry.session})))
-    return [...items].sort((a,b)=>(a.state==='RESOLVED')-(b.state==='RESOLVED') || (b.time || 0)-(a.time || 0))
+    return [...items].sort((a,b)=>Number(CLOSED.has(a.state))-Number(CLOSED.has(b.state)) || (b.time || 0)-(a.time || 0))
   }
-  const openChats=treeRows.filter(row=>incidentRows(row).some(item=>item.state!=='RESOLVED'))
+  const openChats=treeRows.filter(row=>incidentRows(row).some(item=>!CLOSED.has(item.state)))
   const visibleChats=openChats.filter(row=>row.id===session || optionName(row).toLowerCase().includes(chatSearch.toLowerCase()))
   return jsxs('main',{style:{padding:20,maxWidth:1440,margin:'0 auto',lineHeight:1.5},children:[
     jsx('h2',{children:'Expert Guardian'}),paragraph('Choose a chat and incident on the left. Follow the steps on the right.'),
@@ -228,6 +231,13 @@ function Settings({ctx}) {
     selected && jsxs('section',{'aria-label':'Incident journey',children:[
       paragraph('Chat: '+selectedChatName),heading(REASONS[selected.reason] || 'Incident'),paragraph('Detected: '+dated(selected.time)),
       button('Reload incident',()=>refresh()),
+      !CLOSED.has(selected.state) && button('Close without review',()=>setDismissOpen(true),!!selected.consumed && !selected.retry_finished),
+      !CLOSED.has(selected.state) && selected.consumed && !selected.retry_finished && paragraph('Wait for the corrective attempt to finish before closing this incident.'),
+      dismissOpen && !CLOSED.has(selected.state) && jsxs('section',{style:box,children:[heading('Close this incident without review?'),
+        paragraph('This closes the incident and releases its Guardian retry block. It does not mark the problem as fixed or authorize any action. Normal Hermes approvals still apply.'),
+        paragraph('Linked reviews will stop. A request already sent to Expert cannot be retracted. New repeated failures can create a new incident.'),
+        field('Reason for closing (no secrets)',dismissReason,setDismissReason),
+        button('Close incident',()=>act('dismiss',{reason:dismissReason.trim(),confirmed:true}),!dismissReason.trim()),button('Keep incident open',()=>setDismissOpen(false))]}),
       jsx('ol',{'aria-label':'Incident progress',style:{display:'grid',gridTemplateColumns:'repeat(3, minmax(0, 1fr))',gap:8,padding:0,listStyle:'none'},children:STEPS.map((step,index)=>jsx('li',{'aria-current':index===currentStatus[2]?'step':undefined,style:{fontWeight:index===currentStatus[2]?700:400,padding:8,border:'1px solid currentColor',borderRadius:5},children:(index+1)+'. '+step},step))}),
       jsxs('section',{style:box,children:[heading('Step '+(currentStatus[2]+1)+' of '+STEPS.length+' · '+currentStatus[0]),paragraph('Who acts next: '+currentStatus[1]+'.'),paragraph('Observed '+(selected.attempts || 0)+' failed or repeated attempts. '+(selected.packet?.problem || 'Guardian detected a repeated pattern; the cause still needs review.'))]}),
       selected.state==='BLOCK_RETRIES' && jsxs('section',{style:box,children:[heading('1. Review the problem'),paragraph('Describe the problem and what a successful result looks like. Keep secrets and identifying details out of these fields.'),
@@ -260,6 +270,7 @@ function Settings({ctx}) {
         check('I verified the intended outcome was achieved.',verified,setVerified),
         button('Confirm resolved',()=>act('resolve',{verification:verification.trim()}),!verified || !verification.trim()),
         button('Still unresolved',()=>{setVerified(false);act('unresolved')})]}),
+      selected.state==='DISMISSED' && jsxs('section',{style:box,children:[heading('Closed without review'),paragraph('You dismissed this incident. No successful fix was claimed.'),fields({reason:selected.dismissal_reason,closed:dated(selected.closed_at)})]}),
       selected.state==='RESOLVED' && jsxs('section',{style:box,children:[heading('Incident closed'),paragraph('You confirmed the outcome after checking the result.'),fields({problem:selected.packet?.problem || REASONS[selected.reason],success_criteria:selected.criteria || selected.packet?.intended_outcome || 'User verified outcome',verification:selected.verification || 'User verified corrective result'})]}),
       related.length>0 && jsxs('section',{children:[heading('Expert reviews for this incident'),...related.map(reviewCard)]}),
       details('Incident history',jsxs('div',{children:[jsx('ol',{children:[...(selected.transitions || []),...(selected.retry_finished?['Corrective attempt '+(selected.retry_ok?'reported success':'did not succeed')]:[]),...(selected.user_verified?['User verified outcome']:[])].map((event,index)=>jsx('li',{children:STATUS[event]?.[0] || readable(event)},index))}),fields({status:currentStatus[0],detected:dated(selected.time),attempts:selected.attempts || 0,success_criteria:selected.criteria || selected.packet?.intended_outcome || 'Not yet defined'})]}))]}),

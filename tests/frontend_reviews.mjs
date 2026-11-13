@@ -31,6 +31,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
       case 'prepare': i.state='AWAIT_EGRESS_APPROVAL';i.packet={problem:body.description,intended_outcome:body.outcome};i.packet_hash='incident-hash';break
       case 'send': if(rejectSend)throw Error('stale');i.state='PROPOSED_FIX';i.advice={root_cause:'Test cause',recommended_corrective_action:'Check the fixture'};break
       case 'authorize': i.state='SINGLE_RETRY';i.criteria=body.criteria;break
+      case 'dismiss': i.state='DISMISSED';i.user_verified=false;i.action_approved=false;i.dismissal_reason=body.reason;break
       case 'resolve': i.state='RESOLVED';i.user_verified=true;i.verification=body.verification;break
       case 'unresolved': i.outcome_unresolved=true;break
       case 'reset': incidents=[];reviews=[];break
@@ -326,4 +327,32 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   const chatKeys=h.render().filter(n=>n.props.role==='treeitem'&&'aria-expanded' in n.props).map(n=>n.props.value)
   assert.deepEqual(chatKeys,['new-chat'])
 }
-console.log('Frontend checks passed: open-incident chat filtering, closure and refresh, tree selection, names and approval isolation')
+
+// Irrelevant incidents close without preparation, sending, corrective work or success claims.
+{
+  const h=harness([],[incident()]);await h.start()
+  await h.click('Close without review')
+  assert.ok(h.text().includes('releases its Guardian retry block'))
+  await h.click('Close incident')
+  assert.ok(h.text().includes('Closed without review'))
+  assert.ok(h.text().includes('No chats with open incidents.'))
+  assert.equal(h.submissions.length,0)
+  const mutations=h.calls.filter(c=>c.body).map(c=>c.body.action)
+  assert.deepEqual(mutations,['dismiss'])
+  assert.equal(h.calls.find(c=>c.body?.action==='dismiss').body.confirmed,true)
+  assert.ok(!h.text().includes('Confirm resolved'))
+}
+// Cancelling the close prompt or clearing its reason never changes the incident.
+{
+  const h=harness([],[incident()]);await h.start();await h.click('Close without review')
+  await h.change('Reason for closing (no secrets)','')
+  assert.equal(h.button('Close incident').props.disabled,true)
+  await h.click('Keep incident open')
+  assert.ok(h.text().includes('Prepare Expert review'))
+  assert.equal(h.calls.some(c=>c.body),false)
+}
+{
+  const h=harness([],[incident('AWAIT_ACTION_APPROVAL',{consumed:true,retry_finished:false})]);await h.start()
+  assert.equal(h.button('Close without review').props.disabled,true)
+}
+console.log('Frontend checks passed: close without review, confirmation, open-chat filter, exact selection and approval isolation')

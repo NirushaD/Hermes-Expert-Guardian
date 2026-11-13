@@ -1,0 +1,9 @@
+# Expert Guardian 0.6.0 — close without review
+
+Select an incident, choose Close without review, then confirm Close incident. The reason defaults to Not relevant for review and can be edited. No summary preparation, Expert consultation or corrective operation is required. The incident is retained as DISMISSED with a readable Closed without review status, closing time and reason. It is not recorded as a verified fix. It no longer keeps a chat in the open-incident tree.
+
+Dismissal releases only that incident's Guardian retry block, revokes its unconsumed corrective authorization, stops associated reviews and removes any queued handoff for the incident. Normal Hermes permissions and approvals still apply. Other active incident blocks and their evidence are preserved. Existing review budgets are not reset. A new failure pattern can create another incident. Sent external requests cannot be retracted; late consultation results cannot reopen a dismissed incident. A corrective operation already awaiting its result must finish before closure, since closing an incident cannot cancel a running tool.
+
+Validation: all 91 tests passed under installed Hermes Python. New tests cover direct dismissal without provider calls, reason validation, terminal-state rules, exact API confirmation, linked-review cancellation, preservation of newer incident blocks, revocation of unconsumed attempts, in-flight refusal, late consultation results, UI confirmation/cancellation and open-tree removal. The isolated Hermes SDK/native approval probe passed with zero real tools or cloud calls. JavaScript syntax passed. Standard installation scan: safe, with three low-severity literal loopback-address findings.
+
+Live visual acceptance is not established by the React-hook interaction harness. Installation and version checks are performed separately; no existing user incident is dismissed during validation.
