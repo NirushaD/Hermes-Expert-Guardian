@@ -191,3 +191,18 @@ class DraftTests(unittest.TestCase):
             self.assertTrue(self.jobs.empty())
             self.assertEqual(self.g.view('s')['incidents'][0]['draft_status'],'PENDING')
             self.assertEqual(self.g.start_incident_drafts('s'),[])
+
+    def test_output_limit_is_reported_without_accepting_partial_json(self):
+        import threading
+        from guardian.review import LocalOutputLimit
+        self.loop();self.g.start_incident_drafts('s')
+        stop=threading.Event()
+        def limited(*args,**kwargs):
+            stop.set()
+            raise LocalOutputLimit('Local model response limit reached')
+        self.local.side_effect=limited
+        with patch.object(drafts,'_STOP',stop):drafts._worker()
+        current=self.g.view('s')['incidents'][0]
+        self.assertEqual(current['draft_status'],'FAILED')
+        self.assertEqual(current['draft_error'],'local_output_limit')
+        self.assertEqual(current['state'],'BLOCK_RETRIES')

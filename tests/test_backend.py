@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import unittest
@@ -109,3 +110,14 @@ class BackendTests(unittest.TestCase):
             self.assertEqual(response['drafts'][0]['status'],'QUEUED')
             create.return_value.start_incident_drafts.assert_called_once_with('s','i',retry=True)
             create.return_value.send.assert_not_called()
+
+    def test_local_response_length_limit_is_classified_before_json_decode(self):
+        from guardian.review import local_json, LocalOutputLimit
+        config=lambda k,d:{'local_summary_model':'local'}.get(k,d)
+        encoded=json.dumps({'choices':[{'finish_reason':'length','message':{'content':None}}]}).encode()
+        with patch('guardian.review.build_opener') as factory:
+            factory.return_value.open.return_value.__enter__.return_value.read.return_value=encoded
+            with self.assertRaises(LocalOutputLimit):local_json(config,'Return JSON','Public incident',max_tokens=2048)
+            payload=json.loads(factory.return_value.open.call_args.args[0].data)
+            self.assertEqual(payload['max_tokens'],2048)
+            self.assertNotIn('tools',payload)

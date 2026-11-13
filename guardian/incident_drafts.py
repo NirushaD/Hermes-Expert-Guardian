@@ -10,7 +10,7 @@ import time
 import uuid
 
 from . import privacy
-from .review import local_json, sanitise
+from .review import local_json, sanitise, LocalOutputLimit
 
 CLOSED = {'RESOLVED', 'DISMISSED'}
 TRIGGERS = {
@@ -172,6 +172,9 @@ def _worker():
             continue
         try:
             generate(job)
+        except LocalOutputLimit:
+            try:_fail(job,'local_output_limit')
+            except Exception:pass
         except Exception:
             try:_fail(job,'local_generation_failed')
             except Exception:pass
@@ -230,7 +233,7 @@ def generate(job):
             history = {'history_available':False}
     diagnostic = json.dumps({'incident':evidence,'live_context':context,'historical_context':history,
                             'limitations':'Observations are reported, not independently verified. Historical evidence may be incomplete; do not infer missing details.'})[:15000]
-    result = validate(local_json(lambda key,default:config.get(key,default),INSTRUCTIONS,diagnostic,max_tokens=650))
+    result = validate(local_json(lambda key,default:config.get(key,default),INSTRUCTIONS,diagnostic,max_tokens=2048))
     with service.store.session(session,create=False) as data:
         item = next((i for i in data['incidents'] if i['id']==identity),None)
         if item and item.get('draft_job')==token and item['state'] not in CLOSED:
