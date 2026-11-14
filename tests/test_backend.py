@@ -121,3 +121,14 @@ class BackendTests(unittest.TestCase):
             payload=json.loads(factory.return_value.open.call_args.args[0].data)
             self.assertEqual(payload['max_tokens'],2048)
             self.assertNotIn('tools',payload)
+
+    def test_batch_close_requires_confirmation_and_uses_each_target_session(self):
+        from fastapi import HTTPException
+        targets=[{'session':'one','incident':'first'},{'session':'two','incident':'second'}]
+        with patch.object(self.module.integration,'create') as create:
+            with self.assertRaises(HTTPException):self.module.action({'action':'dismiss_many','items':targets,'reason':'Not relevant'})
+            create.return_value.dismiss_many.assert_not_called()
+            create.return_value.dismiss_many.return_value={'closed':2,'failed':0,'results':[]}
+            response=self.module.action({'action':'dismiss_many','items':targets,'reason':'Not relevant','confirmed':True})
+            self.assertEqual(response['closed'],2)
+            create.return_value.dismiss_many.assert_called_once_with(targets,'Not relevant')

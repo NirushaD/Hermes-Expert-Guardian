@@ -213,3 +213,42 @@ class IncidentFlowTests(unittest.TestCase):
             self.assertEqual(self.g.send('s',item['id'],packet['packet_hash']),'DISMISSED')
         self.assertEqual(self.g.view('s')['incidents'][0]['state'],'DISMISSED')
         self.assertNotIn('advice',self.g.view('s')['incidents'][0])
+
+    def test_batch_dismiss_keeps_exact_chat_targets_and_unselected_incidents(self):
+        first=self.loop()
+        for owner in ['other','untouched']:
+            for _ in range(2):self.g.post('terminal',{'command':'fail'},session_id=owner,status='error')
+        second=self.g.view('other')['incidents'][0]
+        response=self.g.dismiss_many([{'session':'s','incident':first['id']},{'session':'other','incident':second['id']}],'Not relevant')
+        self.assertEqual((response['closed'],response['failed']),(2,0))
+        for owner in ['s','other']:
+            closed=self.g.view(owner)['incidents'][0]
+            self.assertEqual(closed['state'],'DISMISSED');self.assertFalse(closed['user_verified'])
+        self.assertEqual(self.g.view('untouched')['incidents'][0]['state'],'BLOCK_RETRIES')
+        self.assertEqual(self.g.llm.calls,[])
+
+    def test_batch_dismiss_reports_inflight_without_blocking_other_closures(self):
+        first=self.loop()
+        with self.store.session('s') as data:
+            data['incidents'][0].update(state='AWAIT_ACTION_APPROVAL',consumed=True,retry_finished=False)
+        for _ in range(2):self.g.post('terminal',{},session_id='other',status='error')
+        second=self.g.view('other')['incidents'][0]
+        response=self.g.dismiss_many([{'session':'s','incident':first['id']},{'session':'other','incident':second['id']}],'Not relevant')
+        self.assertEqual((response['closed'],response['failed']),(1,1))
+        self.assertEqual(response['results'][0]['error'],'in_flight')
+        self.assertEqual(self.g.view('s')['incidents'][0]['state'],'AWAIT_ACTION_APPROVAL')
+        self.assertEqual(self.g.view('other')['incidents'][0]['state'],'DISMISSED')
+
+    def test_batch_validates_all_targets_before_closing_any(self):
+        first=self.loop();valid={'session':'s','incident':first['id']}
+        for items,reason in [([], 'Not relevant'),([valid]*101,'Not relevant'),([valid,{'session':'other'}],'Not relevant'),([valid],'password=example')]:
+            with self.assertRaises(ValueError):self.g.dismiss_many(items,reason)
+            self.assertEqual(self.g.view('s')['incidents'][0]['state'],'BLOCK_RETRIES')
+
+    def test_batch_deduplicates_and_reports_stale_or_missing_items(self):
+        first=self.loop();target={'session':'s','incident':first['id']}
+        self.assertEqual(self.g.dismiss_many([target,target],'Not relevant')['closed'],1)
+        response=self.g.dismiss_many([target,{'session':'missing','incident':'missing'}],'Not relevant')
+        self.assertEqual((response['closed'],response['failed']),(0,2))
+        self.assertEqual(response['results'][1]['error'],'not_found')
+        self.assertEqual(self.g.view('s')['incidents'][0]['state'],'DISMISSED')

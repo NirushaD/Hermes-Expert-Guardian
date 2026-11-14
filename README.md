@@ -1,10 +1,10 @@
-# Hermes Expert Guardian 0.7.1
+# Hermes Expert Guardian 0.8.0
 
 **Automatic local incident drafts:** when Guardian detects an incident, the configured local summary model drafts a problem statement and expected outcome in the background. The screen explains the trigger immediately and prefills both review fields when the draft is ready. User edits are preserved. Existing incidents request a local draft when opened, using bounded evidence around their detection time where available. Drafting never sends to Expert or authorizes a correction.
 
 **Close without review:** select an irrelevant incident, choose Close without review, then Close incident. The default reason is Not relevant for review. Dismissal retains the record, releases that incident's retry block and stops linked reviews without claiming a verified fix or running a correction. A chat disappears from the open tree when its last open incident is closed.
 
-**Two-column incident workspace:** the left-hand tree shows only chats with an open incident. Expand a chat and select an incident. Its details, six numbered stages and current action appear on the right. Selection never sends a review or authorizes a correction. The tree shows incident status and dates; general advice and maintenance sit under Other Guardian tools.
+**Explorer-style incident workspace:** the left panel lists open incidents in sortable Incident, Chat, Status and Detected columns. Click a row to view its steps on the right; use checkboxes, Ctrl-click, Shift-click or Select all for multiple selection. Close selected shows the exact batch and a reason before closing without review. Results identify items that could not close; running corrective attempts stay open.
 
 **Readable names throughout:** chat selection uses Hermes chat titles and a searchable name picker. Duplicate names use dates and readable labels; unnamed chats use Untitled chat. Incident history, review choices and status messages omit backend IDs, hashes and raw records. Visible messages to Hermes use plain language; exact routing is carried in internal Guardian context.
 
@@ -12,7 +12,7 @@
 
 **Verified closure:** advice received is not resolution. Advisory incidents remain visible as unverified until the user records a checked outcome and confirms closure. “Still unresolved” keeps the incident open and offers investigation without granting extra retries. Exact corrective recovery still requires approved evidence, one exact operation, native approval and a successful tool result before verification.
 
-See [the workflow and test evidence](docs/RELEASE-0.7.1.md). Built locally; this does not update an installed plugin or publish the release.
+See [the workflow and test evidence](docs/RELEASE-0.8.0.md). Built locally; this does not update an installed plugin or publish the release.
 
 **New: bounded Expert conversations.** Enable `expert_conversations` in Agent settings for locally anonymised follow-ups within a review. Set `conversation_max_rounds` (1–6, default 3 including the first reply) and `conversation_approve_each_round` (default on). Every outbound round and its retained conversation history pass the privacy boundary. See [conversation settings](docs/REVIEWS.md).
 

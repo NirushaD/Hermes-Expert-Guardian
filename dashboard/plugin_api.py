@@ -33,10 +33,14 @@ def action(body: dict):
         if len(str(body)) > 16000:
             raise ValueError("Oversized action")
         service = integration.create()
+        kind = body["action"]
+        if kind == "dismiss_many":
+            if body.get("confirmed") is not True:
+                raise ValueError("Confirm closing the selected incidents")
+            return service.dismiss_many(body["items"],body["reason"])
         session = body["session"]
         if not isinstance(session, str) or not session or len(session) > 200:
             raise ValueError("Session required")
-        kind = body["action"]
         identity = body.get("incident", "")
         if kind == "draft_incident":
             return {"drafts":service.start_incident_drafts(session,identity,retry=True)}
