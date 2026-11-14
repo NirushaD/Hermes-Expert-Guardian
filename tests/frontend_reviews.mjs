@@ -31,6 +31,16 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
       case 'prepare': i.state='AWAIT_EGRESS_APPROVAL';i.packet={problem:body.description,intended_outcome:body.outcome};i.packet_hash='incident-hash';break
       case 'send': if(rejectSend)throw Error('stale');i.state='PROPOSED_FIX';i.advice={root_cause:'Test cause',recommended_corrective_action:'Check the fixture'};break
       case 'authorize': i.state='SINGLE_RETRY';i.criteria=body.criteria;break
+      case 'dismiss_many': {
+        const results=body.items.map(target=>{
+          const item=(otherChats.get(target.session)?.incidents || incidents).find(i=>i.id===target.incident)
+          if(!item)return {...target,closed:false,error:'not_found'}
+          if(item.consumed && !item.retry_finished)return {...target,closed:false,error:'in_flight'}
+          item.state='DISMISSED';item.dismissal_reason=body.reason;item.user_verified=false
+          return {...target,closed:true}
+        })
+        return {results,closed:results.filter(r=>r.closed).length,failed:results.filter(r=>!r.closed).length}
+      }
       case 'draft_incident': i.draft_status='UNAVAILABLE';return {drafts:[{status:'UNAVAILABLE'}]}
       case 'dismiss': i.state='DISMISSED';i.user_verified=false;i.action_approved=false;i.dismissal_reason=body.reason;break
       case 'resolve': i.state='RESOLVED';i.user_verified=true;i.verification=body.verification;break
@@ -59,17 +69,20 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   }
   const check=async(label,value=true)=>{const node=render().find(n=>n.type==='label'&&n.props.children[1]===' '+label);assert.ok(node,label);node.props.children[0].props.onChange({target:{checked:value}});await settle()}
   const text=()=>render().flatMap(n=>[n.props?.children].flat(Infinity).filter(c=>typeof c==='string')).join('\n')
-  const chooseChatIncident=async(target,id)=>{
-    const chat=render().find(n=>n.type==='button'&&n.props.role==='treeitem'&&n.props.value===target&&'aria-expanded' in n.props)
-    assert.ok(chat,'Chat exists in tree');if(!chat.props['aria-expanded']){chat.props.onClick();await settle()}
-    const item=render().find(n=>n.type==='button'&&n.props.role==='treeitem'&&n.props.value===id&&'aria-selected' in n.props)
-    assert.ok(item,'Incident exists under expanded chat');item.props.onClick();await settle()
+  const chooseChatIncident=async(target,id,event={})=>{
+    const item=render().find(n=>n.type==='tr'&&n.props['data-selection-key']===JSON.stringify([target,id]))
+    assert.ok(item,'Incident exists in list');item.props.onClick(event);await settle()
+  }
+  const mark=async(target,id,checked=true)=>{
+    const item=render().find(n=>n.type==='tr'&&n.props['data-selection-key']===JSON.stringify([target,id]))
+    assert.ok(item,'Incident exists in list')
+    flatten(item).find(n=>n.type==='input').props.onChange({target:{checked}});await settle()
   }
   return {render,button,click,change,check,calls,notifications,submissions,text,settle,tree:()=>{render();return tree},
-    start:async(autoSelect=true)=>{await settle();if(autoSelect){const item=render().find(n=>n.type==='button'&&n.props.role==='treeitem'&&'aria-selected' in n.props);if(item){item.props.onClick();await settle()}}},chooseChatIncident,setChatIncidents:(target,items,advice=[])=>otherChats.set(target,{incidents:structuredClone(items),reviews:structuredClone(advice)}),tick:async()=>{await Promise.all([...timers.values()].map(fn=>fn()));await settle()},
+    start:async(autoSelect=true)=>{await settle();if(autoSelect){const item=render().find(n=>n.type==='tr'&&n.props['data-selection-key']);if(item){item.props.onClick({});await settle()}}},chooseChatIncident,mark,setChatIncidents:(target,items,advice=[])=>otherChats.set(target,{incidents:structuredClone(items),reviews:structuredClone(advice)}),tick:async()=>{await Promise.all([...timers.values()].map(fn=>fn()));await settle()},
     setIncidents:items=>{incidents=structuredClone(items)},rejectSend:()=>{rejectSend=true},rejectLoad:()=>{rejectLoad=true},
     setChats:items=>{chats=structuredClone(items)},rejectNames:()=>{rejectNames=true},deferNames:promise=>{deferredNames=promise},
-    rejectComposer:()=>{acceptComposer=false},deferLoad:promise=>{deferredLoad=promise}}
+    setProfile:value=>{sandbox.host.state.profile=value;sandbox.host.state.focusedSessionProfile=value},rejectComposer:()=>{acceptComposer=false},deferLoad:promise=>{deferredLoad=promise}}
 }
 
 // General review approval remains tied to the loaded session and exact packet hash.
@@ -91,7 +104,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   await h.change('Select a review','two')
   assert.equal(h.button('Approve summary and get advice').props.disabled,false)
   assert.equal(h.render().find(n=>n.type==='label'&&n.props.children[0]==='Select a review').props.children[1].props.value,'two')
-  h.setChatIncidents('another-session',[incident('BLOCK_RETRIES',{id:'other-incident'})]);await h.click('Refresh tree');await h.chooseChatIncident('another-session','other-incident')
+  h.setChatIncidents('another-session',[incident('BLOCK_RETRIES',{id:'other-incident'})]);await h.click('Refresh list');await h.chooseChatIncident('another-session','other-incident')
   assert.ok(!h.text().includes('Public test failure'),'Old selected review is cleared on session change')
 }
 {
@@ -186,7 +199,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
 // A slow response from another chat must not overwrite the current chat.
 {
   const h=harness([],[incident()]);await h.start()
-  h.setChatIncidents('new-chat',[incident('BLOCK_RETRIES',{id:'new-incident'})]);await h.click('Refresh tree')
+  h.setChatIncidents('new-chat',[incident('BLOCK_RETRIES',{id:'new-incident'})]);await h.click('Refresh list')
   let release;h.deferLoad(new Promise(resolve=>{release=resolve}))
   const old=h.button('Reload incident').props.onClick()
   await h.chooseChatIncident('new-chat','new-incident')
@@ -225,11 +238,11 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
 // Duplicate names and unnamed chats remain selectable without displaying an ID.
 {
   const h=harness([],[incident()]);h.setChatIncidents('another-session',[incident('BLOCK_RETRIES',{id:'duplicate-incident'})]);h.setChatIncidents('new-chat',[incident('REVIEWED',{id:'untitled-incident'})]);h.setChats([{id:'session-1',title:'Weekly review',started_at:123},{id:'another-session',title:'Weekly review',started_at:123},{id:'new-chat',title:'',preview:''}]);await h.start()
-  const options=h.render().filter(n=>n.type==='button'&&n.props.role==='treeitem'&&'aria-expanded' in n.props)
-  assert.ok(options.some(n=>n.props.children.includes('Chat 1')))
-  assert.ok(options.some(n=>n.props.children.includes('Chat 2')))
-  assert.ok(options.some(n=>n.props.children.includes('Untitled chat')))
-  h.setChatIncidents('another-session',[incident('BLOCK_RETRIES',{id:'other-incident'})]);await h.click('Refresh tree');await h.chooseChatIncident('another-session','other-incident')
+  const options=h.render().filter(n=>n.type==='tr'&&n.props['data-selection-key'])
+  assert.ok(h.text().includes('Chat 1'))
+  assert.ok(h.text().includes('Chat 2'))
+  assert.ok(h.text().includes('Untitled chat'))
+  h.setChatIncidents('another-session',[incident('BLOCK_RETRIES',{id:'other-incident'})]);await h.click('Refresh list');await h.chooseChatIncident('another-session','other-incident')
   assert.ok(h.text().includes('Chat: Weekly review'))
   assert.ok(h.calls.some(c=>c.path==='/incident?session=another-session'),'Names must not replace the internal routing key')
 }
@@ -237,7 +250,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
 {
   const h=harness([],[incident()]);await h.start();h.setChats([{id:'session-1',title:'Renamed task chat'}]);await h.tick()
   assert.ok(h.text().includes('Chat: Renamed task chat'))
-  h.rejectNames();await h.click('Refresh tree')
+  h.rejectNames();await h.click('Refresh list')
   assert.ok(h.text().includes('Chat names could not be loaded'))
   assert.ok(!h.text().includes('session-1'))
 }
@@ -256,8 +269,8 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   assert.ok(!h.text().includes('Prepare Expert review'))
   const workspace=h.render().find(n=>n.props['aria-label']==='Incident workspace')
   assert.equal(workspace.props.style.display,'grid')
-  assert.ok(workspace.props.style.gridTemplateColumns.includes('32%'))
-  assert.ok(h.render().some(n=>n.type==='aside'&&n.props['aria-label']==='Chats and incidents'))
+  assert.ok(workspace.props.style.gridTemplateColumns.includes('48%'))
+  assert.ok(h.render().some(n=>n.type==='aside'&&n.props['aria-label']==='Incident list'))
   await h.chooseChatIncident('session-1','incident-1')
   assert.ok(h.text().includes('Step 1 of 6'))
   assert.ok(h.text().includes('Who acts next: You'))
@@ -275,7 +288,7 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   await h.click('Approve summary and get advice')
   const send=h.calls.find(c=>c.body?.action==='send').body
   assert.equal(send.session,'another-session');assert.equal(send.incident,'other-incident');assert.equal(send.packet_hash,'second-hash')
-  const treeItem=h.render().find(n=>n.props.role==='treeitem'&&n.props.value==='other-incident')
+  const treeItem=h.render().find(n=>n.props['data-selection-key']===JSON.stringify(['another-session','other-incident']))
   assert.equal(treeItem.props['aria-selected'],true)
 }
 // Clicking between incidents clears drafts and approvals, and refreshing retains the selection.
@@ -286,31 +299,24 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   assert.ok(!h.text().includes('Draft for first incident'))
   assert.equal(h.button('Approve one corrective attempt').props.disabled,true)
   await h.tick()
-  assert.ok(h.render().some(n=>n.props.role==='treeitem'&&n.props.value==='second'&&n.props['aria-selected']))
+  assert.ok(h.render().some(n=>n.props['data-selection-key']===JSON.stringify(['session-1','second'])&&n.props['aria-selected']))
 }
-// A compressed chat groups both lineage records and routes the selected incident to its owner.
+// Compressed-chat incidents keep their own routing keys while sharing a readable chat name.
 {
   const h=harness([]);h.setChats([{id:'tip-chat',_lineage_root_id:'session-1',title:'Long-running task'}])
   h.setChatIncidents('tip-chat',[incident('BLOCK_RETRIES',{id:'tip-incident'})])
   h.setIncidents([incident('BLOCK_RETRIES',{id:'root-incident'})]);await h.start(false)
-  const chat=h.render().find(n=>n.props.role==='treeitem'&&'aria-expanded' in n.props)
-  assert.equal(chat.props['aria-expanded'],true)
-  assert.ok(chat.props.children.includes('(2)'))
-  h.render().find(n=>n.props.role==='treeitem'&&n.props.value==='tip-incident').props.onClick();await h.settle()
+  assert.equal(h.render().filter(n=>n.type==='tr'&&n.props['data-selection-key']).length,2)
+  await h.chooseChatIncident('tip-chat','tip-incident')
   assert.ok(h.calls.some(c=>c.path==='/incident?session=tip-chat'))
   assert.ok(h.text().includes('Chat: Long-running task'))
-  h.render().find(n=>n.props.role==='treeitem'&&'aria-expanded' in n.props).props.onClick();await h.settle()
-  assert.ok(!h.render().some(n=>n.props.role==='treeitem'&&n.props.value==='root-incident'),'A lineage chat can be collapsed')
 }
-
-
 // Only chats with unresolved incidents appear, including reviewed-but-unverified work.
 {
   const h=harness([],[incident('RESOLVED')]);
   h.setChatIncidents('another-session',[incident('REVIEWED',{id:'unverified'})]);await h.start(false)
-  const chatKeys=h.render().filter(n=>n.props.role==='treeitem'&&'aria-expanded' in n.props).map(n=>n.props.value)
+  const chatKeys=[...new Set(h.render().filter(n=>n.type==='tr'&&n.props['data-selection-key']).map(n=>JSON.parse(n.props['data-selection-key'])[0]))]
   assert.deepEqual(chatKeys,['another-session'])
-  assert.equal(h.button('Use focused chat').props.disabled,true)
 }
 // Completing the last incident removes its chat while leaving the closure confirmation visible.
 {
@@ -319,13 +325,13 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   await h.check('I verified the intended outcome was achieved.');await h.click('Confirm resolved')
   assert.ok(h.text().includes('Incident closed'))
   assert.ok(h.text().includes('No chats with open incidents.'))
-  assert.ok(!h.render().some(n=>n.props.role==='treeitem'&&'aria-expanded' in n.props))
+  assert.ok(!h.render().some(n=>n.type==='tr'&&n.props['data-selection-key']))
 }
 // Background refresh removes closed-only chats and adds newly open ones.
 {
   const h=harness([],[incident()]);await h.start(false)
   h.setIncidents([incident('RESOLVED')]);h.setChatIncidents('new-chat',[incident('BLOCK_RETRIES',{id:'new-open'})]);await h.tick()
-  const chatKeys=h.render().filter(n=>n.props.role==='treeitem'&&'aria-expanded' in n.props).map(n=>n.props.value)
+  const chatKeys=[...new Set(h.render().filter(n=>n.type==='tr'&&n.props['data-selection-key']).map(n=>JSON.parse(n.props['data-selection-key'])[0]))]
   assert.deepEqual(chatKeys,['new-chat'])
 }
 
@@ -387,4 +393,71 @@ export function harness(initialReviews=[pending()],initialIncidents=[],mode='enf
   assert.ok(fields.includes('Second problem'));assert.ok(fields.includes('Second outcome'));assert.ok(!fields.includes('First custom edit'))
 }
 
-console.log('Frontend checks passed: local draft prefilling, edit preservation, legacy generation, tree selection, closure and approval isolation')
+// Checkboxes support closing an exact cross-chat selection without opening or drafting it.
+{
+  const h=harness([],[incident(),incident('BLOCK_RETRIES',{id:'keep'})]);h.setChatIncidents('another-session',[incident('BLOCK_RETRIES',{id:'other'})]);await h.start(false)
+  await h.mark('session-1','incident-1');await h.mark('another-session','other')
+  await h.click('Close selected (2)')
+  assert.ok(h.text().includes('Close 2 selected incident(s)?'))
+  await h.click('Close selected incidents')
+  const body=h.calls.find(c=>c.body?.action==='dismiss_many').body
+  assert.deepEqual(Array.from(body.items,item=>item.session+':'+item.incident),['session-1:incident-1','another-session:other'])
+  assert.equal(body.confirmed,true);assert.equal(h.submissions.length,0)
+  assert.ok(!h.calls.some(c=>c.body?.action==='draft_incident'))
+  assert.ok(h.text().includes('2 incident(s) closed'))
+  assert.ok(h.render().some(n=>n.props['data-selection-key']===JSON.stringify(['session-1','keep'])))
+}
+// Explorer-style Ctrl toggles and Shift ranges follow the current visible row order.
+{
+  const h=harness([],[incident(),incident('BLOCK_RETRIES',{id:'second'}),incident('BLOCK_RETRIES',{id:'third'})]);await h.start(false)
+  await h.chooseChatIncident('session-1','incident-1')
+  await h.chooseChatIncident('session-1','third',{ctrlKey:true})
+  assert.equal(h.button('Close selected (2)').props.disabled,false)
+  await h.chooseChatIncident('session-1','second',{shiftKey:true})
+  assert.equal(h.button('Close selected (2)').props.disabled,false)
+  assert.equal(h.render().find(n=>n.props['data-selection-key']===JSON.stringify(['session-1','incident-1'])).props['aria-selected'],false)
+  await h.chooseChatIncident('session-1','incident-1',{ctrlKey:true,shiftKey:true})
+  assert.equal(h.button('Close selected (3)').props.disabled,false)
+  await h.mark('session-1','second',false)
+  assert.equal(h.button('Close selected (2)').props.disabled,false)
+}
+// Select-all is scoped to the visible filtered list; changing a search clears selection.
+{
+  const h=harness([],[incident()]);h.setChatIncidents('another-session',[incident('BLOCK_RETRIES',{id:'other'})]);await h.start(false)
+  await h.click('Select all');assert.equal(h.button('Close selected (2)').props.disabled,false)
+  await h.change('Search incidents or chats','weekly report')
+  assert.equal(h.button('Close selected (0)').props.disabled,true)
+  await h.click('Select all');assert.equal(h.button('Close selected (1)').props.disabled,false)
+  await h.click('Close selected (1)');await h.click('Cancel batch close')
+  assert.ok(!h.calls.some(c=>c.body?.action==='dismiss_many'))
+}
+// A partial batch keeps in-flight incidents selected and displays a readable result for each.
+{
+  const h=harness([],[incident('AWAIT_ACTION_APPROVAL',{consumed:true,retry_finished:false}),incident('BLOCK_RETRIES',{id:'closable'})]);await h.start(false)
+  await h.click('Select all');await h.click('Close selected (2)');await h.click('Close selected incidents')
+  assert.ok(h.text().includes('1 incident(s) closed without review. 1 could not be closed.'))
+  assert.ok(h.text().includes('Still open — corrective attempt awaiting result.'))
+  assert.equal(h.button('Close selected (1)').props.disabled,false)
+}
+// Refreshing during confirmation cannot silently add a newly arrived incident to the batch.
+{
+  const h=harness([],[incident()]);await h.start(false);await h.click('Select all');await h.click('Close selected (1)')
+  h.setIncidents([incident(),incident('BLOCK_RETRIES',{id:'new-arrival'})]);await h.tick()
+  await h.click('Close selected incidents')
+  assert.equal(h.calls.find(c=>c.body?.action==='dismiss_many').body.items.length,1)
+  assert.ok(h.render().some(n=>n.props['data-selection-key']===JSON.stringify(['session-1','new-arrival'])))
+}
+
+
+// Human selection changes invalidate the old confirmation, and profile changes clear it entirely.
+{
+  const h=harness([],[incident(),incident('BLOCK_RETRIES',{id:'other'})]);await h.start(false)
+  await h.mark('session-1','incident-1');await h.click('Close selected (1)')
+  await h.mark('session-1','other')
+  assert.ok(!h.render().some(n=>n.type==='button'&&n.props.children==='Close selected incidents'))
+  await h.click('Close selected (2)');h.setProfile('another-profile');await h.settle()
+  assert.ok(!h.render().some(n=>n.type==='button'&&n.props.children==='Close selected incidents'))
+  assert.equal(h.button('Close selected (0)').props.disabled,true)
+  assert.ok(!h.calls.some(c=>c.body?.action==='dismiss_many'))
+}
+console.log('Frontend checks passed: Explorer-style list, Ctrl/Shift and checkbox selection, exact batch closure, partial results and existing recovery safeguards')

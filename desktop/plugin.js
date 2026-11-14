@@ -37,7 +37,12 @@ function Settings({ctx}) {
   const [chatSnapshot,setChatSnapshot] = useState(null)
   const [chatError,setChatError] = useState('')
   const [chatSearch,setChatSearch] = useState('')
-  const [expandedChats,setExpandedChats] = useState(focusedChat ? [focusedChat] : [])
+  const [marked,setMarked] = useState([])
+  const [sort,setSort] = useState({column:'detected',descending:true})
+  const anchor = useRef(null)
+  const [bulkTargets,setBulkTargets] = useState(null)
+  const [bulkReason,setBulkReason] = useState('Not relevant for review')
+  const [bulkReport,setBulkReport] = useState([])
   const pendingIncident = useRef(null)
   const currentIncident = useRef('')
   const viewport = useValue(host.state.viewport)
@@ -103,19 +108,6 @@ function Settings({ctx}) {
     if(target===session)refresh()
   }
   const chatKeys = row => [row.id,row._lineage_root_id,row.resolved_id].filter(Boolean)
-  const toggleChat = row => setExpandedChats(previous=>chatKeys(row).some(key=>previous.includes(key))?previous.filter(key=>!chatKeys(row).includes(key)):[...previous,row.id])
-  const treeKey = (event,row,child=false) => {
-    const nodes=[...event.currentTarget.closest('[role=tree]').querySelectorAll('button[role=treeitem]')]
-    const at=nodes.indexOf(event.currentTarget)
-    if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){
-      event.preventDefault();nodes[event.key==='Home'?0:event.key==='End'?nodes.length-1:Math.max(0,Math.min(nodes.length-1,at+(event.key==='ArrowDown'?1:-1)))]?.focus()
-    } else if(event.key==='ArrowRight' && !child && !chatKeys(row).some(key=>expandedChats.includes(key))){event.preventDefault();toggleChat(row)}
-    else if(event.key==='ArrowLeft'){
-      event.preventDefault()
-      if(child)nodes.find(node=>node.value===row.id)?.focus()
-      else if(chatKeys(row).some(key=>expandedChats.includes(key)))toggleChat(row)
-    }
-  }
   const refresh = async (quiet=false) => {
     const target=session.trim(), version=++requestVersion.current
     if(!target){setError('Choose the chat containing your task first.');return}
@@ -133,10 +125,10 @@ function Settings({ctx}) {
       }
       setError(Array.isArray(data.reviews)?'':'This backend does not expose advisory reviews. Restart Hermes to load the updated plugin backend.')
     } catch {
-      if(isLive(target) && version===requestVersion.current){setSnapshot(null);setError('Could not load this incident. Refresh the tree and select it again.')}
+      if(isLive(target) && version===requestVersion.current){setSnapshot(null);setError('Could not load this incident. Refresh the list and select it again.')}
     } finally {if(!quiet)setBusy(false)}
   }
-  useEffect(()=>{setChatSnapshot(null);setExpandedChats(focusedChat?[focusedChat]:[]);setSession(focusedChat || '');loadChats()},[profile])
+  useEffect(()=>{setChatSnapshot(null);setMarked([]);setBulkTargets(null);setBulkReport([]);anchor.current=null;setSession(focusedChat || '');loadChats()},[profile])
   useEffect(()=>{loadChats()},[activeSession])
   useEffect(()=>{setSnapshot(null);if(pendingIncident.current?.session!==session)setIncident('');pendingIncident.current=null;setReview('');clearForm();setMessage('');setError('');refresh()},[session,profile])
   useEffect(()=>{
@@ -224,29 +216,99 @@ function Settings({ctx}) {
     const items=cached.flatMap(entry=>(entry.session===session && loaded?incidents:entry.incidents).map(item=>({...item,owner:entry.session})))
     return [...items].sort((a,b)=>Number(CLOSED.has(a.state))-Number(CLOSED.has(b.state)) || (b.time || 0)-(a.time || 0))
   }
-  const openChats=treeRows.filter(row=>incidentRows(row).some(item=>!CLOSED.has(item.state)))
-  const visibleChats=openChats.filter(row=>row.id===session || optionName(row).toLowerCase().includes(chatSearch.toLowerCase()))
-  return jsxs('main',{style:{padding:20,maxWidth:1440,margin:'0 auto',lineHeight:1.5},children:[
-    jsx('h2',{children:'Expert Guardian'}),paragraph('Choose a chat and incident on the left. Follow the steps on the right.'),
-    jsxs('div',{'aria-label':'Incident workspace',style:{display:'grid',gridTemplateColumns:viewport?.narrow?'minmax(0, 1fr)':'minmax(260px, 32%) minmax(0, 1fr)',gap:24,alignItems:'start'},children:[
-      jsxs('aside',{'aria-label':'Chats and incidents',style:{...box,margin:0,position:viewport?.narrow?'static':'sticky',top:12,maxHeight:viewport?.narrow?360:'75vh',overflowY:'auto',minWidth:0},children:[
-        heading('Chats and incidents'),field('Find a chat by name',chatSearch,setChatSearch),
-        button('Refresh tree',loadChats),button('Use focused chat',()=>{if(focusedChat){setExpandedChats(previous=>previous.includes(focusedChat)?previous:[...previous,focusedChat]);chooseIncident('',focusedChat);loadChats()}},!focusedChat || !openChats.some(row=>chatKeys(row).includes(focusedChat))),
+  const selectionKey = item => JSON.stringify([item.owner,item.id])
+  const allRows=treeRows.flatMap(row=>incidentRows(row).filter(item=>!CLOSED.has(item.state)).map(item=>({...item,chatLabel:optionName(row),title:incidentTitle(item)})))
+  const uniqueRows=[...new Map(allRows.map(item=>[selectionKey(item),item])).values()]
+  const rows=uniqueRows.filter(item=>(item.title+' '+item.chatLabel+' '+status(item)[0]).toLowerCase().includes(chatSearch.toLowerCase())).sort((a,b)=>{
+    const value=item=>sort.column==='detected'?(item.time || 0):sort.column==='chat'?item.chatLabel:sort.column==='status'?status(item)[0]:item.title
+    const left=value(a),right=value(b),order=typeof left==='number'?left-right:String(left).localeCompare(String(right))
+    return sort.descending?-order:order
+  })
+  const rowKeys=rows.map(selectionKey)
+  const selection=rows.filter(item=>marked.includes(selectionKey(item)))
+  const allChecked=rows.length>0 && selection.length===rows.length
+  useEffect(()=>{
+    const keys=new Set(uniqueRows.map(selectionKey))
+    setMarked(previous=>previous.filter(key=>keys.has(key)))
+  },[profile,uniqueRows.map(selectionKey).join('|')])
+  const markRow = (item,event={},open=true) => {
+    if(mutationLock.current)return
+    const key=selectionKey(item), additive=event.ctrlKey || event.metaKey
+    if(event.shiftKey && anchor.current && rowKeys.includes(anchor.current)){
+      const start=rowKeys.indexOf(anchor.current),end=rowKeys.indexOf(key)
+      const range=rowKeys.slice(Math.min(start,end),Math.max(start,end)+1)
+      setMarked(previous=>additive?[...new Set([...previous,...range])]:range)
+    } else if(additive){setMarked(previous=>previous.includes(key)?previous.filter(value=>value!==key):[...previous,key]);anchor.current=key}
+    else {setMarked([key]);anchor.current=key}
+    setBulkReport([]);setBulkTargets(null)
+    if(open)chooseIncident(item.id,item.owner)
+  }
+  const toggleCheck = (item,checked) => {
+    const key=selectionKey(item)
+    setMarked(previous=>checked?[...new Set([...previous,key])]:previous.filter(value=>value!==key))
+    anchor.current=key;setBulkReport([]);setBulkTargets(null)
+  }
+  const selectAll = () => {setMarked(rowKeys);setBulkReport([]);setBulkTargets(null)}
+  const listKey = (event,item) => {
+    if((event.ctrlKey || event.metaKey) && event.key.toLowerCase()==='a'){event.preventDefault();selectAll();return}
+    if(event.key==='Escape'){setMarked([]);setBulkTargets(null);return}
+    if(event.key===' '){event.preventDefault();toggleCheck(item,!marked.includes(selectionKey(item)));return}
+    if(event.key==='Enter'){event.preventDefault();markRow(item,event);return}
+    if(['ArrowUp','ArrowDown','Home','End'].includes(event.key)){
+      event.preventDefault()
+      const at=rowKeys.indexOf(selectionKey(item)),next=event.key==='Home'?0:event.key==='End'?rows.length-1:Math.max(0,Math.min(rows.length-1,at+(event.key==='ArrowDown'?1:-1)))
+      event.currentTarget.closest('tbody').querySelectorAll('tr')[next]?.focus()
+      if(!event.ctrlKey && !event.metaKey)markRow(rows[next],event)
+    }
+  }
+  const closeSelection = async () => {
+    const targets=bulkTargets
+    if(!targets || targets.profile!==profile || currentProfile.current!==profile || busy || mutationLock.current || !bulkReason.trim())return
+    mutationLock.current=true;setBusy(true);setError('')
+    try {
+      const data=await ctx.rest('/action',{method:'POST',body:{action:'dismiss_many',confirmed:true,reason:bulkReason.trim(),items:targets.items.map(item=>({session:item.owner,incident:item.id}))}})
+      if(currentProfile.current!==targets.profile)return
+      if(!Array.isArray(data.results))throw Error('Invalid batch result')
+      const report=targets.items.map(item=>{
+        const result=data.results.find(result=>result.session===item.owner && result.incident===item.id)
+        return {...item,closed:result?.closed===true,error:result?.error || 'not_closed'}
+      })
+      setBulkReport(report);setMarked(report.filter(item=>!item.closed).map(selectionKey));setBulkTargets(null)
+      setMessage(report.filter(item=>item.closed).length+' incident(s) closed without review. '+report.filter(item=>!item.closed).length+' could not be closed.')
+      await Promise.all([loadChats(),session.trim()?refresh(true):Promise.resolve()])
+    } catch {if(currentProfile.current===targets.profile)setError('Could not complete the batch. Refresh the list to check which incidents are still open before trying again.')}
+    finally {mutationLock.current=false;setBusy(false)}
+  }
+  const cellStyle={padding:'8px 6px',textAlign:'left',verticalAlign:'top',borderBottom:'1px solid #727b8840',overflowWrap:'anywhere'}
+  return jsxs('main',{style:{padding:20,maxWidth:1600,margin:'0 auto',lineHeight:1.5},children:[
+    jsx('h2',{children:'Expert Guardian'}),paragraph('Click an incident to view it. Use checkboxes or Ctrl/Shift-click to select several, then close the selection.'),
+    jsxs('div',{'aria-label':'Incident workspace',style:{display:'grid',gridTemplateColumns:viewport?.narrow?'minmax(0, 1fr)':'minmax(380px, 48%) minmax(0, 1fr)',gap:24,alignItems:'start'},children:[
+      jsxs('aside',{'aria-label':'Incident list',style:{...box,margin:0,position:viewport?.narrow?'static':'sticky',top:12,maxHeight:viewport?.narrow?460:'80vh',overflowY:'auto',minWidth:0},children:[
+        heading('Open incidents'),field('Search incidents or chats',chatSearch,value=>{setChatSearch(value);setMarked([]);setBulkTargets(null);anchor.current=null}),
+        button('Refresh list',loadChats),button('Select all',selectAll,!rows.length),button('Clear selection',()=>{setMarked([]);setBulkTargets(null)},!marked.length),
+        button('Close selected ('+selection.length+')',()=>{setBulkTargets({profile,items:selection.map(item=>({...item}))});setBulkReason('Not relevant for review');setBulkReport([])},!selection.length || selection.length>100),
+        paragraph(selection.length+' selected · '+rows.length+' open incidents'+(selection.length>100?' · Select at most 100 per batch.':'')),
+        bulkTargets?.profile===profile && jsxs('section',{style:box,children:[heading('Close '+bulkTargets.items.length+' selected incident(s)?'),
+          paragraph('These incidents will be closed without review and their Guardian retry blocks released. No fix is verified and no action is authorized. Attempts awaiting a result will stay open.'),
+          jsx('ul',{style:{maxHeight:160,overflowY:'auto',paddingLeft:20},children:bulkTargets.items.map(item=>jsx('li',{children:item.chatLabel+' — '+item.title},selectionKey(item)))}),
+          field('Reason for closing selected incidents (no secrets)',bulkReason,setBulkReason),button('Close selected incidents',closeSelection,!bulkReason.trim()),button('Cancel batch close',()=>setBulkTargets(null))]}),
+        bulkReport.length>0 && jsxs('section',{role:'status',style:box,children:[heading('Batch close results'),jsx('ul',{style:{paddingLeft:20},children:bulkReport.map(item=>jsx('li',{children:item.chatLabel+' — '+item.title+': '+(item.closed?'Closed without review':item.error==='in_flight'?'Still open — corrective attempt awaiting result.':item.error==='not_found'?'Could not find this incident.':'Not closed — its state changed or it is no longer eligible. Refresh before retrying.')},selectionKey(item)))})]}),
         chatError && jsx('p',{role:'alert',children:chatError}),
-        !openChats.length && paragraph(chatSnapshot?'No chats with open incidents.':chatError?'Refresh the tree to load open incidents.':'Loading chats with open incidents…'),
-        openChats.length>0 && !visibleChats.length && paragraph('No matching chats with open incidents.'),
-        jsx('ul',{role:'tree','aria-label':'Chat incident tree',style:{listStyle:'none',padding:0,margin:0},children:visibleChats.map(row=>{
-          const items=incidentRows(row), expanded=chatKeys(row).some(key=>expandedChats.includes(key))
-          return jsxs('li',{role:'none',style:{margin:'8px 0'},children:[
-            jsx('button',{type:'button',role:'treeitem',value:row.id,'aria-expanded':expanded,'aria-label':optionName(row),onClick:()=>toggleChat(row),onKeyDown:event=>treeKey(event,row),style:{...inputStyle,textAlign:'left',fontWeight:600,overflowWrap:'anywhere',cursor:'pointer',margin:0},children:(expanded?'▾ ':'▸ ')+optionName(row)+' ('+items.length+')'}),
-            expanded && jsx('ul',{role:'group',style:{listStyle:'none',padding:'4px 0 4px 16px'},children:items.length?items.map((item,index)=>jsx('li',{role:'none',children:jsxs('button',{type:'button',role:'treeitem',value:item.id,'aria-selected':session===item.owner && incident===item.id,'aria-label':incidentTitle(item)+' · '+dated(item.time)+' · Incident '+(index+1),onClick:()=>chooseIncident(item.id,item.owner),onKeyDown:event=>treeKey(event,row,true),style:{...inputStyle,textAlign:'left',cursor:'pointer',margin:'6px 0',borderWidth:session===item.owner && incident===item.id?2:1,fontWeight:session===item.owner && incident===item.id?600:400},children:[jsx('span',{style:{display:'block'},children:incidentTitle(item)}),jsx('small',{style:{display:'block'},children:(session===item.owner && incident===item.id?'Selected · ':'')+status(item)[0]}),jsx('small',{style:{display:'block'},children:dated(item.time)})]})},item.owner+':'+item.id)):jsx('li',{children:paragraph(chatSnapshot?'No incidents recorded.':'Loading incidents…')})})
-          ]},row.id)
-        })})
+        !uniqueRows.length && paragraph(chatSnapshot?'No chats with open incidents.':chatError?'Refresh the list to load open incidents.':'Loading open incidents…'),
+        uniqueRows.length>0 && !rows.length && paragraph('No matching open incidents.'),
+        jsx('div',{style:{overflowX:'auto'},children:jsxs('table',{role:'grid','aria-label':'Open incident list','aria-multiselectable':true,style:{width:'100%',borderCollapse:'collapse',tableLayout:'fixed',fontSize:13},children:[
+          jsx('thead',{children:jsxs('tr',{children:[jsx('th',{style:{...cellStyle,width:24},children:jsx('input',{type:'checkbox','aria-label':'Select all visible incidents',checked:allChecked,disabled:busy || !rows.length,ref:node=>{if(node)node.indeterminate=selection.length>0 && !allChecked},onChange:event=>{if(event.target.checked)selectAll();else {setMarked([]);setBulkTargets(null)}}})}),
+            ...[['name','Incident'],['chat','Chat'],['status','Status'],['detected','Detected']].map(([column,label])=>jsx('th',{style:cellStyle,'aria-sort':sort.column===column?(sort.descending?'descending':'ascending'):'none',children:button(label,()=>setSort({column,descending:sort.column===column?!sort.descending:false}))},column))]})}),
+          jsx('tbody',{children:rows.map(item=>jsxs('tr',{role:'row',tabIndex:0,'data-selection-key':selectionKey(item),'aria-selected':marked.includes(selectionKey(item)),onClick:event=>markRow(item,event),onKeyDown:event=>listKey(event,item),style:{cursor:'default',background:marked.includes(selectionKey(item))?'var(--ui-bg-selected, rgba(100, 140, 210, 0.18))':'transparent',outline:session===item.owner && incident===item.id?'1px solid currentColor':undefined},children:[
+            jsx('td',{style:cellStyle,children:jsx('input',{type:'checkbox','aria-label':'Select '+item.title+' in '+item.chatLabel,checked:marked.includes(selectionKey(item)),disabled:busy,onClick:event=>event.stopPropagation(),onChange:event=>toggleCheck(item,event.target.checked)})}),
+            jsx('td',{style:{...cellStyle,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'},title:item.title,children:item.title}),jsx('td',{style:{...cellStyle,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'},title:item.chatLabel,children:item.chatLabel}),jsx('td',{style:cellStyle,children:status(item)[0]}),jsx('td',{style:cellStyle,children:dated(item.time)})]},selectionKey(item)))})
+        ]})})
       ]}),
       jsxs('section',{'aria-label':'Selected incident',style:{minWidth:0},children:[
+        selection.length>1 && paragraph('Viewing the focused incident. Use Close selected on the left to close the '+selection.length+' selected incidents together.'),
         error && jsx('p',{role:'alert',style:box,children:error}),message && jsx('p',{role:'status',style:box,children:message}),
         busy && paragraph('Loading or processing…'),
-        !selected && jsxs('section',{style:box,children:[heading('Select an incident'),paragraph('Expand a chat on the left, then choose an incident to see its details and next step. No action is taken when you select an incident.')]}),
+        !selected && jsxs('section',{style:box,children:[heading('Select an incident'),paragraph('Click an incident row on the left to see its details and next step. No action is taken when you select an incident.')]}),
     selected && jsxs('section',{'aria-label':'Incident journey',children:[
       paragraph('Chat: '+selectedChatName),heading(REASONS[selected.reason] || 'Incident'),paragraph('Detected: '+dated(selected.time)),
       button('Reload incident',()=>refresh()),

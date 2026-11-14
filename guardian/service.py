@@ -281,6 +281,36 @@ class Guardian:
                        for i in data["incidents"]):
                 data["events"] = [e for e in data["events"] if e["scope"] != item["scope"]]
 
+    def dismiss_many(self, items, reason):
+        """Close exact user selections, reporting each item without hiding failures."""
+        privacy.safe_text(reason,800)
+        if not reason.strip() or not isinstance(items,list) or not 1<=len(items)<=100:
+            raise ValueError("Select between one and 100 incidents and provide a reason")
+        targets = []
+        seen = set()
+        for item in items:
+            if (not isinstance(item,dict) or set(item)!={"session","incident"}
+                    or any(not isinstance(item[key],str) or not item[key].strip() or len(item[key])>200
+                           for key in ("session","incident"))):
+                raise ValueError("Invalid incident selection")
+            key = (item["session"],item["incident"])
+            if key not in seen:
+                targets.append(item)
+                seen.add(key)
+        results = []
+        for item in targets:
+            result = {**item,"closed":False}
+            try:
+                self.dismiss(item["session"],item["incident"],reason)
+                result["closed"] = True
+            except StopIteration:
+                result["error"] = "not_found"
+            except ValueError as error:
+                result["error"] = "in_flight" if str(error)=="Wait for the corrective attempt to finish" else "not_closed"
+            results.append(result)
+        return {"results":results,"closed":sum(item["closed"] for item in results),
+                "failed":sum(not item["closed"] for item in results)}
+
     def context(self, session_id="", **_):
         if not self.enabled() or not session_id:
             return None
